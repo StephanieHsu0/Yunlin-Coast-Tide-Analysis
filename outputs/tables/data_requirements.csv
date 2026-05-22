@@ -1,0 +1,6 @@
+﻿required_field,purpose
+station,Compare Mailiao and Boziliao
+year,Annual trend and annual maxima
+month,Seasonality and annual aggregation
+mean_tide,Monthly and annual mean sea-level analysis
+max_high_water,Annual maximum series for extreme-value analysis

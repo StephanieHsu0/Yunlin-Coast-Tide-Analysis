@@ -1,0 +1,17 @@
+﻿station,scenario,removed_year,distribution,return_period_years,return_level
+Boziliao,all_years,,Gumbel,50,2.923161107744445
+Boziliao,all_years,,Gumbel,100,3.0652825004478252
+Boziliao,all_years,,GEV,50,2.6261177341197293
+Boziliao,all_years,,GEV,100,2.662778243596311
+Boziliao,remove_largest_year,2006.0,Gumbel,50,2.8774431652795167
+Boziliao,remove_largest_year,2006.0,Gumbel,100,3.0137752183466695
+Boziliao,remove_largest_year,2006.0,GEV,50,2.595381898398867
+Boziliao,remove_largest_year,2006.0,GEV,100,2.632626400493239
+Mailiao,all_years,,Gumbel,50,3.4103706466075456
+Mailiao,all_years,,Gumbel,100,3.5669961128216
+Mailiao,all_years,,GEV,50,4.227773686519009
+Mailiao,all_years,,GEV,100,5.010098404796557
+Mailiao,remove_largest_year,2006.0,Gumbel,50,3.1908290224922693
+Mailiao,remove_largest_year,2006.0,Gumbel,100,3.3127283535815213
+Mailiao,remove_largest_year,2006.0,GEV,50,3.558620983980251
+Mailiao,remove_largest_year,2006.0,GEV,100,3.9247442653557787

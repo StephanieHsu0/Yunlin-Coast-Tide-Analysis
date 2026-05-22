@@ -1,0 +1,5 @@
+﻿station,year,month,mean_tide,max_high_water,max_astronomical_tide,min_low_water,tide_datum,unit
+Mailiao,2020,1,,,,,TWVD2001,m
+Mailiao,2020,2,,,,,TWVD2001,m
+Boziliao,2020,1,,,,,TWVD2001,m
+Boziliao,2020,2,,,,,TWVD2001,m
