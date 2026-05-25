@@ -27,6 +27,10 @@ STATION_LABELS = {
     "麥寮潮位站": "Mailiao",
     "萡子寮潮位站": "Boziliao",
 }
+HISTOGRAM_BINS = {
+    "Mailiao": [2.0, 2.5, 3.0, 3.5, 4.0],
+    "Boziliao": [1.5, 1.75, 2.0, 2.25, 2.5, 2.75],
+}
 
 
 @dataclass
@@ -671,14 +675,19 @@ def plot_histogram_with_fits(
 ) -> None:
     padding = values.std(ddof=1) if len(values) > 1 else 0.1
     x_values = np.linspace(values.min() - padding, values.max() + padding, 300)
+    bins = HISTOGRAM_BINS[station_label]
 
     plt.figure(figsize=(8, 5))
-    sns.histplot(values, stat="density", bins="auto", color="lightgray", edgecolor="black")
+    sns.histplot(values, stat="density", bins=bins, color="lightgray", edgecolor="black")
     for fit in fits:
         plt.plot(x_values, distribution_pdf(x_values, fit), label=fit.distribution)
     plt.title(f"{station_label}: Annual Maximum High-Water Distribution")
     plt.xlabel("Highest high-water level (m, TWVD2001)")
     plt.ylabel("Density")
+    if station_label == "Boziliao":
+        plt.xticks(bins, [f"{edge:.2f}" for edge in bins])
+        for edge in bins:
+            plt.axvline(edge, color="gray", linestyle="--", linewidth=0.6, alpha=0.35)
     plt.legend()
     figure_number = "05" if slug == "mailiao" else "06"
     save_fig(f"{figure_number}_histogram_fitted_pdf_{slug}.png")
@@ -897,6 +906,14 @@ def write_summary(
         "## Extreme-Value Model Fit",
         "",
         model_metrics.to_markdown(index=False),
+        "",
+        (
+            "Histogram bin edges were manually selected using interpretable water-level intervals. "
+            "For Mailiao, 0.5 m intervals were used to highlight the isolated 2018 extreme event. "
+            "For Boziliao, narrower intervals were used because annual maximum high-water levels "
+            "were concentrated within a smaller range. The histograms are used for visual inspection "
+            "only; model assessment relies on AIC/BIC, Q-Q plots, return level plots, and sensitivity analysis."
+        ),
         "",
         "## Return Levels",
         "",

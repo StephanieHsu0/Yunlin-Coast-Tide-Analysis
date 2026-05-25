@@ -104,6 +104,8 @@ Mailiao 2018 annual maximum high-water level is contributed by month 5: highest_
 | 麥寮潮位站          | Gumbel         |        2.37093   | -0.74187 |  1.24959  |  20 |
 | 麥寮潮位站          | GEV            |        4.28302   | -2.56604 |  0.421154 |  20 |
 
+Histogram bin edges were manually selected using interpretable water-level intervals. For Mailiao, 0.5 m intervals were used to highlight the isolated 2018 extreme event. For Boziliao, narrower intervals were used because annual maximum high-water levels were concentrated within a smaller range. The histograms are used for visual inspection only; model assessment relies on AIC/BIC, Q-Q plots, return level plots, and sensitivity analysis.
+
 ## Return Levels
 
 | station_name   | distribution   |   return_period_years |   annual_exceedance_probability |   return_level |
