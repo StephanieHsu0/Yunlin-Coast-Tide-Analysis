@@ -87,7 +87,23 @@ def load_processed_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     for data in [annual_tide, monthly_tide]:
         data["station_label"] = data["station_name"].map(STATION_LABELS).fillna(data["station_name"])
 
+    monthly_tide = apply_monthly_quality_flags(monthly_tide)
     return station_info, annual_tide, monthly_tide
+
+
+def apply_monthly_quality_flags(monthly_tide: pd.DataFrame) -> pd.DataFrame:
+    monthly_tide = monthly_tide.copy()
+    incomplete_mask = (
+        (monthly_tide["station_name"] == "麥寮潮位站")
+        & (monthly_tide["year"] == 2015)
+        & (monthly_tide["month"].isin([1, 2, 3, 4, 5, 6, 7]))
+    )
+    monthly_tide["data_quality_flag"] = "normal"
+    monthly_tide.loc[incomplete_mask, "data_quality_flag"] = "partial_or_incomplete_record"
+    monthly_tide["is_valid_monthly_mean_for_eda"] = (
+        monthly_tide["data_quality_flag"] != "partial_or_incomplete_record"
+    )
+    return monthly_tide
 
 
 def validate_inputs(
@@ -148,6 +164,36 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
     save_fig("02_monthly_tide_boxplot.png")
+
+    monthly_tide_qc = monthly_tide[monthly_tide["is_valid_monthly_mean_for_eda"]].copy()
+    plt.figure(figsize=(12, 5))
+    sns.lineplot(
+        data=monthly_tide_qc,
+        x="date",
+        y="mean_tide_level",
+        hue="station_label",
+        marker="o",
+        linewidth=1.5,
+        markersize=3,
+    )
+    plt.title("Monthly Mean Tide Level after QC, 2006-2025")
+    plt.xlabel("Date")
+    plt.ylabel("Mean tide level (m, TWVD2001)")
+    plt.legend(title="Station")
+    save_fig("15_monthly_mean_tide_timeseries_qc.png")
+
+    plt.figure(figsize=(10, 5))
+    sns.boxplot(
+        data=monthly_tide_qc,
+        x="month",
+        y="mean_tide_level",
+        hue="station_label",
+    )
+    plt.title("Seasonality of Monthly Mean Tide Level after QC")
+    plt.xlabel("Month")
+    plt.ylabel("Mean tide level (m, TWVD2001)")
+    plt.legend(title="Station")
+    save_fig("16_seasonality_monthly_mean_tide_qc.png")
 
     plt.figure(figsize=(10, 5))
     for station_name, group in annual_tide.groupby("station_name"):
@@ -366,6 +412,32 @@ def plot_monthly_outliers(monthly_tide: pd.DataFrame, monthly_outliers: pd.DataF
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
     save_fig("12_monthly_mean_tide_outliers_marked.png")
+
+
+def write_incomplete_monthly_records(monthly_tide: pd.DataFrame) -> pd.DataFrame:
+    incomplete_records = monthly_tide[
+        monthly_tide["data_quality_flag"] == "partial_or_incomplete_record"
+    ].copy()
+    columns = [
+        "station_name",
+        "station_label",
+        "year",
+        "month",
+        "date",
+        "mean_tide_level",
+        "highest_high_water_level",
+        "mean_high_water_level",
+        "mean_low_water_level",
+        "mean_tidal_range",
+        "data_quality_flag",
+    ]
+    incomplete_records = incomplete_records.reindex(columns=columns)
+    incomplete_records.to_csv(
+        TABLE_DIR / "incomplete_monthly_records.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return incomplete_records
 
 
 def write_top_extreme_years(annual_tide: pd.DataFrame) -> pd.DataFrame:
@@ -725,6 +797,7 @@ def write_summary(
     station_info: pd.DataFrame,
     summary_statistics: pd.DataFrame,
     monthly_outliers: pd.DataFrame,
+    incomplete_monthly_records: pd.DataFrame,
     annual_outliers: pd.DataFrame,
     top_extremes: pd.DataFrame,
     mailiao_2018_monthly_check: pd.DataFrame,
@@ -760,6 +833,19 @@ def write_summary(
         "## Monthly Mean Tide IQR Outliers",
         "",
         monthly_outliers.to_markdown(index=False) if not monthly_outliers.empty else "No monthly IQR outliers detected.",
+        "",
+        "## Incomplete Monthly Records",
+        "",
+        incomplete_monthly_records.to_markdown(index=False)
+        if not incomplete_monthly_records.empty
+        else "No incomplete monthly records flagged.",
+        "",
+        (
+            "Mailiao 2015 Jan-Jul records are flagged as partial or incomplete monthly records "
+            "because several key monthly tide statistics are missing. Therefore, these months are "
+            "excluded from the QC version of monthly mean tide and seasonality plots, but the "
+            "original data are retained for transparency."
+        ),
         "",
         "## Annual High-Water IQR Outliers",
         "",
@@ -806,6 +892,7 @@ def write_summary(
         "## Data Quality Notes",
         "",
         "- Mailiao has abnormal monthly mean tide values around 2015 and they are flagged for QC in `monthly_outliers.csv`.",
+        "- Mailiao 2015 Jan-Jul monthly records are flagged as partial or incomplete and are excluded from QC monthly EDA figures.",
         "- Mailiao 2018 has a dominant annual maximum high-water value and strongly affects tail fitting.",
         "- Outliers are flagged for review only; they are not removed from the analysis.",
         "",
@@ -834,6 +921,7 @@ def analyze() -> None:
 
     plot_eda(monthly_tide, annual_tide)
     monthly_outliers, annual_outliers = write_outlier_tables(monthly_tide, annual_tide)
+    incomplete_monthly_records = write_incomplete_monthly_records(monthly_tide)
     plot_monthly_outliers(monthly_tide, monthly_outliers)
     top_extremes = write_top_extreme_years(annual_tide)
     mailiao_2018_monthly_check = write_mailiao_2018_monthly_check(monthly_tide)
@@ -846,6 +934,7 @@ def analyze() -> None:
         station_info,
         summary_statistics,
         monthly_outliers,
+        incomplete_monthly_records,
         annual_outliers,
         top_extremes,
         mailiao_2018_monthly_check,

@@ -30,6 +30,20 @@ The analysis uses relative water levels referenced to TWVD2001.
 | 麥寮潮位站          | Mailiao         |   2015 |       6 | 2015-06-01 00:00:00 |             1.022 |     -0.084125 |      0.774875 | high           |
 | 麥寮潮位站          | Mailiao         |   2015 |       7 | 2015-07-01 00:00:00 |             1.352 |     -0.084125 |      0.774875 | high           |
 
+## Incomplete Monthly Records
+
+| station_name   | station_label   |   year |   month | date                |   mean_tide_level |   highest_high_water_level |   mean_high_water_level |   mean_low_water_level |   mean_tidal_range | data_quality_flag            |
+|:---------------|:----------------|-------:|--------:|:--------------------|------------------:|---------------------------:|------------------------:|-----------------------:|-------------------:|:-----------------------------|
+| 麥寮潮位站          | Mailiao         |   2015 |       1 | 2015-01-01 00:00:00 |           nan     |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       2 | 2015-02-01 00:00:00 |            -0.595 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       3 | 2015-03-01 00:00:00 |            -0.829 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       4 | 2015-04-01 00:00:00 |            -0.122 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       5 | 2015-05-01 00:00:00 |             0.25  |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       6 | 2015-06-01 00:00:00 |             1.022 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+| 麥寮潮位站          | Mailiao         |   2015 |       7 | 2015-07-01 00:00:00 |             1.352 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
+
+Mailiao 2015 Jan-Jul records are flagged as partial or incomplete monthly records because several key monthly tide statistics are missing. Therefore, these months are excluded from the QC version of monthly mean tide and seasonality plots, but the original data are retained for transparency.
+
 ## Annual High-Water IQR Outliers
 
 | station_name   | station_label   |   year |   highest_high_water_level |   lower_bound |   upper_bound | outlier_type   |
@@ -152,6 +166,7 @@ Mailiao 2018 annual maximum high-water level is contributed by month 5: highest_
 ## Data Quality Notes
 
 - Mailiao has abnormal monthly mean tide values around 2015 and they are flagged for QC in `monthly_outliers.csv`.
+- Mailiao 2015 Jan-Jul monthly records are flagged as partial or incomplete and are excluded from QC monthly EDA figures.
 - Mailiao 2018 has a dominant annual maximum high-water value and strongly affects tail fitting.
 - Outliers are flagged for review only; they are not removed from the analysis.
 

@@ -163,6 +163,8 @@ Figure outputs:
 - `outputs/figures/12_monthly_mean_tide_outliers_marked.png`
 - `outputs/figures/13_return_level_plot_mailiao_logx.png`
 - `outputs/figures/14_return_level_plot_boziliao_logx.png`
+- `outputs/figures/15_monthly_mean_tide_timeseries_qc.png`
+- `outputs/figures/16_seasonality_monthly_mean_tide_qc.png`
 
 Table outputs:
 
@@ -173,6 +175,7 @@ Table outputs:
 - `outputs/tables/sensitivity_extreme_year.csv`
 - `outputs/tables/sensitivity_data_length.csv`
 - `outputs/tables/monthly_outliers.csv`
+- `outputs/tables/incomplete_monthly_records.csv`
 - `outputs/tables/annual_outliers.csv`
 - `outputs/tables/top_extreme_years.csv`
 - `outputs/tables/mailiao_2018_monthly_check.csv`
@@ -188,6 +191,7 @@ EDA:
 
 - monthly mean tide time series
 - monthly tide boxplot for seasonality
+- QC versions of monthly mean tide and seasonality plots excluding flagged incomplete Mailiao 2015 Jan-Jul records
 - annual maximum high-water time series
 - annual `hhw_minus_hat` time series for preliminary interpretation of observed high water relative to astronomical tide
 - IQR outlier checks for monthly `mean_tide_level` and annual `highest_high_water_level`
