@@ -149,8 +149,8 @@ Inputs:
 
 Figure outputs:
 
-- `outputs/figures/01_monthly_mean_tide_timeseries.png`
-- `outputs/figures/02_monthly_tide_boxplot.png`
+- `outputs/figures/01_monthly_mean_tide_timeseries_raw.png`
+- `outputs/figures/02_monthly_tide_boxplot_raw.png`
 - `outputs/figures/03_annual_mean_sea_level_trend.png`
 - `outputs/figures/04_annual_max_high_water_timeseries.png`
 - `outputs/figures/05_histogram_fitted_pdf_mailiao.png`
@@ -164,7 +164,7 @@ Figure outputs:
 - `outputs/figures/13_return_level_plot_mailiao_logx.png`
 - `outputs/figures/14_return_level_plot_boziliao_logx.png`
 - `outputs/figures/15_monthly_mean_tide_timeseries_qc.png`
-- `outputs/figures/16_seasonality_monthly_mean_tide_qc.png`
+- `outputs/figures/16_monthly_tide_boxplot_qc.png`
 
 Table outputs:
 
@@ -189,9 +189,8 @@ Summary:
 
 EDA:
 
-- monthly mean tide time series
-- monthly tide boxplot for seasonality
-- QC versions of monthly mean tide and seasonality plots excluding flagged incomplete Mailiao 2015 Jan-Jul records
+- raw monthly mean tide time series and raw monthly tide boxplot show all original monthly records
+- QC-filtered monthly mean tide and seasonality figures exclude flagged incomplete monthly records
 - annual maximum high-water time series
 - annual `hhw_minus_hat` time series for preliminary interpretation of observed high water relative to astronomical tide
 - IQR outlier checks for monthly `mean_tide_level` and annual `highest_high_water_level`
@@ -221,6 +220,12 @@ Uncertainty analysis:
 
 - remove-largest-year sensitivity for 50- and 100-year return levels
 - data-length sensitivity using all years, last 15 years, and last 10 years
+
+Data-quality figure usage:
+
+- Raw figures show all original monthly records.
+- QC-filtered figures exclude flagged incomplete monthly records.
+- Annual maximum high-water analysis still uses the original `annual_tide` records.
 
 ## Interpretation Notes
 

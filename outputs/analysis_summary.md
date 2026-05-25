@@ -165,6 +165,11 @@ Mailiao 2018 annual maximum high-water level is contributed by month 5: highest_
 
 ## Data Quality Notes
 
+- Raw monthly figures are retained for transparency and data-quality inspection. QC-filtered monthly figures exclude Mailiao Jan-Jul 2015 partial/incomplete records and are used as the main figures for monthly mean tide and seasonality interpretation.
+- Monthly-mean and seasonality figures use QC-filtered data, while annual-extreme analyses retain the original annual maximum records.
+- The HHW-HAT plot highlights Mailiao 2018 as an influential extreme year.
+- Return level plots with log x-axis are recommended for hydrologic frequency interpretation.
+- Annual Mean Sea Level Trend uses the official annual `mean_tide_level` from `annual_tide_yunlin.csv`, so it retains the original annual data rather than recalculating from monthly records.
 - Mailiao has abnormal monthly mean tide values around 2015 and they are flagged for QC in `monthly_outliers.csv`.
 - Mailiao 2015 Jan-Jul monthly records are flagged as partial or incomplete and are excluded from QC monthly EDA figures.
 - Mailiao 2018 has a dominant annual maximum high-water value and strongly affects tail fitting.
@@ -181,6 +186,7 @@ Mailiao 2018 annual maximum high-water level is contributed by month 5: highest_
 - GEV is flexible, but its shape parameter may be unstable for short records.
 - GEV results should be interpreted as a sensitivity comparison rather than a definitive design estimate.
 - Gumbel should be treated as the more stable baseline model.
+- Gumbel is treated as the stable baseline model, while GEV is interpreted as a sensitivity model due to possible shape-parameter instability under the short 20-year record.
 - Mailiao's 2018 extreme high-water value can noticeably affect tail fitting and should be discussed as an influential event.
 - Mailiao's monthly mean tide around 2015 should be checked as a potential data-quality issue before strong physical interpretation.
 - The two tide stations support comparison along the Yunlin coast but do not fully represent the entire coastline.

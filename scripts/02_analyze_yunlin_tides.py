@@ -136,6 +136,8 @@ def validate_inputs(
 
 
 def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
+    monthly_tide_qc = monthly_tide[monthly_tide["is_valid_monthly_mean_for_eda"]].copy()
+
     plt.figure(figsize=(12, 5))
     sns.lineplot(
         data=monthly_tide,
@@ -146,11 +148,11 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         linewidth=1.5,
         markersize=3,
     )
-    plt.title("Monthly Mean Tide Level, 2006-2025")
+    plt.title("Monthly Mean Tide Level, 2006-2025 (Raw)")
     plt.xlabel("Date")
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
-    save_fig("01_monthly_mean_tide_timeseries.png")
+    save_fig("01_monthly_mean_tide_timeseries_raw.png")
 
     plt.figure(figsize=(10, 5))
     sns.boxplot(
@@ -159,13 +161,12 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         y="mean_tide_level",
         hue="station_label",
     )
-    plt.title("Seasonality of Monthly Mean Tide Level")
+    plt.title("Seasonality of Monthly Mean Tide Level (Raw)")
     plt.xlabel("Month")
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
-    save_fig("02_monthly_tide_boxplot.png")
+    save_fig("02_monthly_tide_boxplot_raw.png")
 
-    monthly_tide_qc = monthly_tide[monthly_tide["is_valid_monthly_mean_for_eda"]].copy()
     plt.figure(figsize=(12, 5))
     sns.lineplot(
         data=monthly_tide_qc,
@@ -176,7 +177,7 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         linewidth=1.5,
         markersize=3,
     )
-    plt.title("Monthly Mean Tide Level after QC, 2006-2025")
+    plt.title("Monthly Mean Tide Level, 2006-2025 (QC-filtered)")
     plt.xlabel("Date")
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
@@ -189,11 +190,11 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         y="mean_tide_level",
         hue="station_label",
     )
-    plt.title("Seasonality of Monthly Mean Tide Level after QC")
+    plt.title("Seasonality of Monthly Mean Tide Level (QC-filtered)")
     plt.xlabel("Month")
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
-    save_fig("16_seasonality_monthly_mean_tide_qc.png")
+    save_fig("16_monthly_tide_boxplot_qc.png")
 
     plt.figure(figsize=(10, 5))
     for station_name, group in annual_tide.groupby("station_name"):
@@ -227,9 +228,9 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         plt.annotate(
             "Mailiao 2018 extreme",
             xy=(row["year"], row["highest_high_water_level"]),
-            xytext=(row["year"] - 3, row["highest_high_water_level"] + 0.15),
+            xytext=(row["year"] + 1.2, row["highest_high_water_level"] - 0.28),
             arrowprops={"arrowstyle": "->", "color": "black"},
-            fontsize=9,
+            fontsize=10,
         )
     plt.title("Annual Maximum High-Water Level")
     plt.xlabel("Year")
@@ -247,6 +248,18 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         marker="o",
     )
     plt.axhline(0, color="black", linestyle="--", linewidth=1)
+    mailiao_2018_hhw = annual_tide[
+        (annual_tide["station_label"] == "Mailiao") & (annual_tide["year"] == 2018)
+    ]
+    if not mailiao_2018_hhw.empty:
+        row = mailiao_2018_hhw.iloc[0]
+        plt.annotate(
+            "Mailiao 2018",
+            xy=(row["year"], row["hhw_minus_hat"]),
+            xytext=(row["year"] + 1.0, row["hhw_minus_hat"] - 0.25),
+            arrowprops={"arrowstyle": "->", "color": "black"},
+            fontsize=10,
+        )
     plt.title("Difference between Highest High Water and Highest Astronomical Tide")
     plt.xlabel("Year")
     plt.ylabel("HHW - HAT (m)")
@@ -410,6 +423,14 @@ def plot_monthly_outliers(monthly_tide: pd.DataFrame, monthly_outliers: pd.DataF
     plt.title("Monthly Mean Tide Level with IQR Outliers Marked")
     plt.xlabel("Date")
     plt.ylabel("Mean tide level (m, TWVD2001)")
+    plt.text(
+        0.01,
+        0.95,
+        "Markers indicate IQR-based outliers",
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        verticalalignment="top",
+    )
     plt.legend(title="Station")
     save_fig("12_monthly_mean_tide_outliers_marked.png")
 
@@ -891,6 +912,11 @@ def write_summary(
         "",
         "## Data Quality Notes",
         "",
+        "- Raw monthly figures are retained for transparency and data-quality inspection. QC-filtered monthly figures exclude Mailiao Jan-Jul 2015 partial/incomplete records and are used as the main figures for monthly mean tide and seasonality interpretation.",
+        "- Monthly-mean and seasonality figures use QC-filtered data, while annual-extreme analyses retain the original annual maximum records.",
+        "- The HHW-HAT plot highlights Mailiao 2018 as an influential extreme year.",
+        "- Return level plots with log x-axis are recommended for hydrologic frequency interpretation.",
+        "- Annual Mean Sea Level Trend uses the official annual `mean_tide_level` from `annual_tide_yunlin.csv`, so it retains the original annual data rather than recalculating from monthly records.",
         "- Mailiao has abnormal monthly mean tide values around 2015 and they are flagged for QC in `monthly_outliers.csv`.",
         "- Mailiao 2015 Jan-Jul monthly records are flagged as partial or incomplete and are excluded from QC monthly EDA figures.",
         "- Mailiao 2018 has a dominant annual maximum high-water value and strongly affects tail fitting.",
@@ -907,6 +933,7 @@ def write_summary(
         "- GEV is flexible, but its shape parameter may be unstable for short records.",
         "- GEV results should be interpreted as a sensitivity comparison rather than a definitive design estimate.",
         "- Gumbel should be treated as the more stable baseline model.",
+        "- Gumbel is treated as the stable baseline model, while GEV is interpreted as a sensitivity model due to possible shape-parameter instability under the short 20-year record.",
         "- Mailiao's 2018 extreme high-water value can noticeably affect tail fitting and should be discussed as an influential event.",
         "- Mailiao's monthly mean tide around 2015 should be checked as a potential data-quality issue before strong physical interpretation.",
         "- The two tide stations support comparison along the Yunlin coast but do not fully represent the entire coastline.",
