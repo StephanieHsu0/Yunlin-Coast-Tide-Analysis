@@ -23,6 +23,10 @@ STATION_SLUGS = {
     "麥寮潮位站": "mailiao",
     "萡子寮潮位站": "boziliao",
 }
+STATION_LABELS = {
+    "麥寮潮位站": "Mailiao",
+    "萡子寮潮位站": "Boziliao",
+}
 
 
 @dataclass
@@ -58,6 +62,11 @@ def save_fig(filename: str) -> None:
     plt.close()
 
 
+def format_year_axis(start_year: int = 2006, end_year: int = 2025, step: int = 2) -> None:
+    """Show only integer years on annual-data figures."""
+    plt.xticks(np.arange(start_year, end_year + 1, step))
+
+
 def load_processed_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     station_path = PROCESSED_DIR / "station_info_yunlin_tide.csv"
     annual_path = PROCESSED_DIR / "annual_tide_yunlin.csv"
@@ -74,6 +83,10 @@ def load_processed_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     annual_tide = pd.read_csv(annual_path)
     monthly_tide = pd.read_csv(monthly_path, parse_dates=["date"])
     validate_inputs(station_info, annual_tide, monthly_tide)
+
+    for data in [annual_tide, monthly_tide]:
+        data["station_label"] = data["station_name"].map(STATION_LABELS).fillna(data["station_name"])
+
     return station_info, annual_tide, monthly_tide
 
 
@@ -112,7 +125,7 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         data=monthly_tide,
         x="date",
         y="mean_tide_level",
-        hue="station_name",
+        hue="station_label",
         marker="o",
         linewidth=1.5,
         markersize=3,
@@ -128,7 +141,7 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         data=monthly_tide,
         x="month",
         y="mean_tide_level",
-        hue="station_name",
+        hue="station_label",
     )
     plt.title("Seasonality of Monthly Mean Tide Level")
     plt.xlabel("Month")
@@ -139,15 +152,17 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
     plt.figure(figsize=(10, 5))
     for station_name, group in annual_tide.groupby("station_name"):
         group = group.sort_values("year")
+        station_label = group["station_label"].iloc[0]
         x = group["year"].to_numpy(dtype=float)
         y = group["mean_tide_level"].to_numpy(dtype=float)
         slope, intercept, *_ = stats.linregress(x, y)
-        plt.scatter(x, y, label=f"{station_name} observed")
-        plt.plot(x, intercept + slope * x, label=f"{station_name} trend")
+        plt.scatter(x, y, label=f"{station_label} observed")
+        plt.plot(x, intercept + slope * x, label=f"{station_label} trend")
     plt.title("Annual Mean Sea Level Trend")
     plt.xlabel("Year")
     plt.ylabel("Annual mean sea level (m, TWVD2001)")
     plt.legend()
+    format_year_axis()
     save_fig("03_annual_mean_sea_level_trend.png")
 
     plt.figure(figsize=(10, 5))
@@ -155,14 +170,43 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
         data=annual_tide,
         x="year",
         y="highest_high_water_level",
-        hue="station_name",
+        hue="station_label",
         marker="o",
     )
+    mailiao_2018 = annual_tide[
+        (annual_tide["station_label"] == "Mailiao") & (annual_tide["year"] == 2018)
+    ]
+    if not mailiao_2018.empty:
+        row = mailiao_2018.iloc[0]
+        plt.annotate(
+            "Mailiao 2018 extreme",
+            xy=(row["year"], row["highest_high_water_level"]),
+            xytext=(row["year"] - 3, row["highest_high_water_level"] + 0.15),
+            arrowprops={"arrowstyle": "->", "color": "black"},
+            fontsize=9,
+        )
     plt.title("Annual Maximum High-Water Level")
     plt.xlabel("Year")
     plt.ylabel("Highest high-water level (m, TWVD2001)")
     plt.legend(title="Station")
+    format_year_axis()
     save_fig("04_annual_max_high_water_timeseries.png")
+
+    plt.figure(figsize=(10, 5))
+    sns.lineplot(
+        data=annual_tide,
+        x="year",
+        y="hhw_minus_hat",
+        hue="station_label",
+        marker="o",
+    )
+    plt.axhline(0, color="black", linestyle="--", linewidth=1)
+    plt.title("Difference between Highest High Water and Highest Astronomical Tide")
+    plt.xlabel("Year")
+    plt.ylabel("HHW - HAT (m)")
+    plt.legend(title="Station")
+    format_year_axis()
+    save_fig("11_hhw_minus_hat_timeseries.png")
 
 
 def mann_kendall_test(years: np.ndarray, values: np.ndarray) -> tuple[float, float, float]:
@@ -232,6 +276,177 @@ def run_trend_analysis(annual_tide: pd.DataFrame) -> pd.DataFrame:
     return trend_results
 
 
+def iqr_outliers(data: pd.DataFrame, value_column: str, group_column: str = "station_name") -> pd.DataFrame:
+    rows = []
+    for station_name, group in data.groupby(group_column):
+        values = group[value_column].dropna()
+        q1 = values.quantile(0.25)
+        q3 = values.quantile(0.75)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        outlier_rows = group[
+            (group[value_column] < lower_bound) | (group[value_column] > upper_bound)
+        ].copy()
+        if outlier_rows.empty:
+            continue
+
+        outlier_rows["outlier_variable"] = value_column
+        outlier_rows["outlier_type"] = np.where(
+            outlier_rows[value_column] > upper_bound,
+            "high",
+            "low",
+        )
+        outlier_rows["q1"] = q1
+        outlier_rows["q3"] = q3
+        outlier_rows["iqr"] = iqr
+        outlier_rows["lower_bound"] = lower_bound
+        outlier_rows["upper_bound"] = upper_bound
+        rows.append(outlier_rows)
+
+    if not rows:
+        return pd.DataFrame()
+    return pd.concat(rows, ignore_index=True)
+
+
+def write_outlier_tables(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    monthly_columns = [
+        "station_name",
+        "station_label",
+        "year",
+        "month",
+        "date",
+        "mean_tide_level",
+        "lower_bound",
+        "upper_bound",
+        "outlier_type",
+    ]
+    annual_columns = [
+        "station_name",
+        "station_label",
+        "year",
+        "highest_high_water_level",
+        "lower_bound",
+        "upper_bound",
+        "outlier_type",
+    ]
+
+    monthly_outliers = iqr_outliers(monthly_tide, "mean_tide_level")
+    annual_outliers = iqr_outliers(annual_tide, "highest_high_water_level")
+
+    monthly_outliers = monthly_outliers.reindex(columns=monthly_columns)
+    annual_outliers = annual_outliers.reindex(columns=annual_columns)
+    monthly_outliers.to_csv(TABLE_DIR / "monthly_outliers.csv", index=False, encoding="utf-8-sig")
+    annual_outliers.to_csv(TABLE_DIR / "annual_outliers.csv", index=False, encoding="utf-8-sig")
+    return monthly_outliers, annual_outliers
+
+
+def plot_monthly_outliers(monthly_tide: pd.DataFrame, monthly_outliers: pd.DataFrame) -> None:
+    plt.figure(figsize=(12, 5))
+    sns.lineplot(
+        data=monthly_tide,
+        x="date",
+        y="mean_tide_level",
+        hue="station_label",
+        linewidth=1.5,
+    )
+    if not monthly_outliers.empty:
+        sns.scatterplot(
+            data=monthly_outliers,
+            x="date",
+            y="mean_tide_level",
+            hue="station_label",
+            style="outlier_type",
+            s=100,
+            edgecolor="black",
+            legend=False,
+        )
+    plt.title("Monthly Mean Tide Level with IQR Outliers Marked")
+    plt.xlabel("Date")
+    plt.ylabel("Mean tide level (m, TWVD2001)")
+    plt.legend(title="Station")
+    save_fig("12_monthly_mean_tide_outliers_marked.png")
+
+
+def write_top_extreme_years(annual_tide: pd.DataFrame) -> pd.DataFrame:
+    top_extremes = (
+        annual_tide.sort_values(["station_name", "highest_high_water_level"], ascending=[True, False])
+        .groupby("station_name")
+        .head(5)
+        .copy()
+    )
+    top_extremes["rank"] = top_extremes.groupby("station_name")["highest_high_water_level"].rank(
+        method="first",
+        ascending=False,
+    ).astype(int)
+    top_extremes = top_extremes[
+        [
+            "station_name",
+            "station_label",
+            "rank",
+            "year",
+            "highest_high_water_level",
+            "highest_astronomical_tide",
+            "hhw_minus_hat",
+            "mean_tide_level",
+        ]
+    ].sort_values(["station_name", "rank"])
+    top_extremes.to_csv(TABLE_DIR / "top_extreme_years.csv", index=False, encoding="utf-8-sig")
+    return top_extremes
+
+
+def write_mailiao_2018_monthly_check(monthly_tide: pd.DataFrame) -> pd.DataFrame:
+    mailiao_2018 = monthly_tide[
+        (monthly_tide["station_name"] == "麥寮潮位站") & (monthly_tide["year"] == 2018)
+    ].copy()
+    mailiao_2018 = mailiao_2018.sort_values("highest_high_water_level", ascending=False)
+    mailiao_2018 = mailiao_2018[
+        [
+            "station_name",
+            "station_label",
+            "year",
+            "month",
+            "date",
+            "highest_high_water_level",
+            "highest_astronomical_tide",
+            "hhw_minus_hat",
+            "mean_tide_level",
+        ]
+    ]
+    mailiao_2018.to_csv(
+        TABLE_DIR / "mailiao_2018_monthly_check.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return mailiao_2018
+
+
+def write_summary_statistics(annual_tide: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    variables = ["mean_tide_level", "highest_high_water_level"]
+    for station_name, group in annual_tide.groupby("station_name"):
+        station_label = group["station_label"].iloc[0]
+        for variable in variables:
+            values = group[variable].dropna()
+            rows.append(
+                {
+                    "station_name": station_name,
+                    "station_label": station_label,
+                    "variable": variable,
+                    "mean": values.mean(),
+                    "std": values.std(ddof=1),
+                    "min": values.min(),
+                    "max": values.max(),
+                    "median": values.median(),
+                    "skewness": values.skew(),
+                }
+            )
+
+    summary_statistics = pd.DataFrame(rows)
+    summary_statistics.to_csv(TABLE_DIR / "summary_statistics.csv", index=False, encoding="utf-8-sig")
+    return summary_statistics
+
+
 def fit_distribution(values: np.ndarray, station_name: str, distribution: str) -> FitResult:
     if distribution == "Gumbel":
         params = stats.gumbel_r.fit(values)
@@ -285,6 +500,7 @@ def run_extreme_value_analysis(
             warnings.warn(f"{station_name}: too few annual maxima for extreme-value fitting.")
             continue
 
+        station_label = group["station_label"].iloc[0]
         fits = [
             fit_distribution(values, station_name, "Gumbel"),
             fit_distribution(values, station_name, "GEV"),
@@ -339,9 +555,10 @@ def run_extreme_value_analysis(
                     }
                 )
 
-        plot_histogram_with_fits(station_name, slug, values, fits)
-        plot_qq(station_name, slug, values, fits)
-        plot_return_level(station_name, slug, fits)
+        plot_histogram_with_fits(station_label, slug, values, fits)
+        plot_qq(station_label, slug, values, fits)
+        plot_return_level(station_label, slug, fits)
+        plot_return_level_logx(station_label, slug, fits)
 
     parameters = pd.DataFrame(parameter_rows)
     metrics = pd.DataFrame(metric_rows)
@@ -354,7 +571,7 @@ def run_extreme_value_analysis(
 
 
 def plot_histogram_with_fits(
-    station_name: str,
+    station_label: str,
     slug: str,
     values: np.ndarray,
     fits: list[FitResult],
@@ -366,7 +583,7 @@ def plot_histogram_with_fits(
     sns.histplot(values, stat="density", bins="auto", color="lightgray", edgecolor="black")
     for fit in fits:
         plt.plot(x_values, distribution_pdf(x_values, fit), label=fit.distribution)
-    plt.title(f"{station_name}: Annual Maximum High-Water Distribution")
+    plt.title(f"{station_label}: Annual Maximum High-Water Distribution")
     plt.xlabel("Highest high-water level (m, TWVD2001)")
     plt.ylabel("Density")
     plt.legend()
@@ -375,12 +592,12 @@ def plot_histogram_with_fits(
 
 
 def plot_qq(
-    station_name: str,
+    station_label: str,
     slug: str,
     values: np.ndarray,
     fits: list[FitResult],
 ) -> None:
-    probabilities = (np.arange(1, len(values) + 1) - 0.5) / len(values)
+    probabilities = np.arange(1, len(values) + 1) / (len(values) + 1)
     theoretical_values = [distribution_ppf(probabilities, fit) for fit in fits]
     min_axis = min(values.min(), *(series.min() for series in theoretical_values))
     max_axis = max(values.max(), *(series.max() for series in theoretical_values))
@@ -389,7 +606,7 @@ def plot_qq(
     for fit, theoretical in zip(fits, theoretical_values, strict=True):
         plt.scatter(theoretical, values, label=fit.distribution)
     plt.plot([min_axis, max_axis], [min_axis, max_axis], color="black", linestyle="--")
-    plt.title(f"{station_name}: Q-Q Plot")
+    plt.title(f"{station_label}: Q-Q Plot")
     plt.xlabel("Theoretical quantiles")
     plt.ylabel("Observed annual maxima")
     plt.legend()
@@ -397,20 +614,36 @@ def plot_qq(
     save_fig(f"{figure_number}_qq_plot_{slug}.png")
 
 
-def plot_return_level(station_name: str, slug: str, fits: list[FitResult]) -> None:
+def plot_return_level(station_label: str, slug: str, fits: list[FitResult]) -> None:
     periods = np.arange(2, 101)
     probabilities = 1 - 1 / periods
 
     plt.figure(figsize=(8, 5))
     for fit in fits:
         plt.plot(periods, distribution_ppf(probabilities, fit), label=fit.distribution)
-    plt.title(f"{station_name}: Return Level Plot")
+    plt.title(f"{station_label}: Return Level Plot")
     plt.xlabel("Return period (years)")
     plt.ylabel("Return level (m, TWVD2001)")
     plt.legend()
     figure_number = "09" if slug == "mailiao" else "10"
-    filename_slug = "bozilio" if slug == "boziliao" else slug
-    save_fig(f"{figure_number}_return_level_plot_{filename_slug}.png")
+    save_fig(f"{figure_number}_return_level_plot_{slug}.png")
+
+
+def plot_return_level_logx(station_label: str, slug: str, fits: list[FitResult]) -> None:
+    periods = np.arange(2, 101)
+    probabilities = 1 - 1 / periods
+
+    plt.figure(figsize=(8, 5))
+    for fit in fits:
+        plt.plot(periods, distribution_ppf(probabilities, fit), label=fit.distribution)
+    plt.xscale("log")
+    plt.xticks([2, 5, 10, 20, 50, 100], [2, 5, 10, 20, 50, 100])
+    plt.title(f"{station_label}: Return Level Plot (log x-axis)")
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    plt.legend()
+    figure_number = "13" if slug == "mailiao" else "14"
+    save_fig(f"{figure_number}_return_level_plot_{slug}_logx.png")
 
 
 def run_extreme_year_sensitivity(annual_tide: pd.DataFrame) -> pd.DataFrame:
@@ -475,6 +708,7 @@ def run_data_length_sensitivity(annual_tide: pd.DataFrame) -> pd.DataFrame:
                         "n_years": len(values),
                         "return_level_50yr": distribution_ppf(np.array([1 - 1 / 50]), fit)[0],
                         "return_level_100yr": distribution_ppf(np.array([1 - 1 / 100]), fit)[0],
+                        "reliability_note": "low sample size" if len(values) < 15 else "acceptable",
                     }
                 )
 
@@ -489,12 +723,25 @@ def run_data_length_sensitivity(annual_tide: pd.DataFrame) -> pd.DataFrame:
 
 def write_summary(
     station_info: pd.DataFrame,
+    summary_statistics: pd.DataFrame,
+    monthly_outliers: pd.DataFrame,
+    annual_outliers: pd.DataFrame,
+    top_extremes: pd.DataFrame,
+    mailiao_2018_monthly_check: pd.DataFrame,
     trend_results: pd.DataFrame,
     model_metrics: pd.DataFrame,
     return_levels: pd.DataFrame,
     extreme_sensitivity: pd.DataFrame,
     length_sensitivity: pd.DataFrame,
 ) -> None:
+    mailiao_2018_peak = mailiao_2018_monthly_check.iloc[0]
+    mailiao_2018_month = int(mailiao_2018_peak["month"])
+    not_august_note = (
+        "- The peak month is not August, so it should not be directly attributed to the 2018 0823 tropical depression event without event matching."
+        if mailiao_2018_month != 8
+        else "- The peak month is August; event attribution still requires checking timing against the 2018 0823 tropical depression event."
+    )
+
     lines = [
         "# Analysis Summary",
         "",
@@ -505,6 +752,36 @@ def write_summary(
         station_info.to_markdown(index=False),
         "",
         "The analysis uses relative water levels referenced to TWVD2001.",
+        "",
+        "## Summary Statistics",
+        "",
+        summary_statistics.to_markdown(index=False),
+        "",
+        "## Monthly Mean Tide IQR Outliers",
+        "",
+        monthly_outliers.to_markdown(index=False) if not monthly_outliers.empty else "No monthly IQR outliers detected.",
+        "",
+        "## Annual High-Water IQR Outliers",
+        "",
+        annual_outliers.to_markdown(index=False) if not annual_outliers.empty else "No annual IQR outliers detected.",
+        "",
+        "## Top Five Annual Extreme High-Water Years",
+        "",
+        top_extremes.to_markdown(index=False),
+        "",
+        "## Mailiao 2018 Monthly Check",
+        "",
+        mailiao_2018_monthly_check.to_markdown(index=False),
+        "",
+        (
+            "Mailiao 2018 annual maximum high-water level is contributed by "
+            f"month {mailiao_2018_month}: "
+            f"highest_high_water_level = {mailiao_2018_peak['highest_high_water_level']:.3f} m, "
+            f"highest_astronomical_tide = {mailiao_2018_peak['highest_astronomical_tide']:.3f} m, "
+            f"hhw_minus_hat = {mailiao_2018_peak['hhw_minus_hat']:.3f} m."
+        ),
+        "",
+        not_august_note,
         "",
         "## Trend Results",
         "",
@@ -526,12 +803,25 @@ def write_summary(
         "",
         length_sensitivity.to_markdown(index=False),
         "",
+        "## Data Quality Notes",
+        "",
+        "- Mailiao has abnormal monthly mean tide values around 2015 and they are flagged for QC in `monthly_outliers.csv`.",
+        "- Mailiao 2018 has a dominant annual maximum high-water value and strongly affects tail fitting.",
+        "- Outliers are flagged for review only; they are not removed from the analysis.",
+        "",
         "## Interpretation Notes",
         "",
         "- Trends should be interpreted as relative sea-level change, not direct global sea-level rise.",
+        "- Trends represent relative sea-level change referenced to TWVD2001.",
         "- The annual maximum high-water level includes astronomical and meteorological effects.",
+        "- `hhw_minus_hat` is a preliminary indicator of non-astronomical contribution, not a rigorous storm surge decomposition.",
         "- With only 20 years of data, 50- and 100-year return levels have high uncertainty.",
+        "- 50-year and 100-year return levels are extrapolations and have high uncertainty.",
         "- GEV is flexible, but its shape parameter may be unstable for short records.",
+        "- GEV results should be interpreted as a sensitivity comparison rather than a definitive design estimate.",
+        "- Gumbel should be treated as the more stable baseline model.",
+        "- Mailiao's 2018 extreme high-water value can noticeably affect tail fitting and should be discussed as an influential event.",
+        "- Mailiao's monthly mean tide around 2015 should be checked as a potential data-quality issue before strong physical interpretation.",
         "- The two tide stations support comparison along the Yunlin coast but do not fully represent the entire coastline.",
     ]
     SUMMARY_PATH.write_text("\n".join(lines), encoding="utf-8")
@@ -543,12 +833,22 @@ def analyze() -> None:
     station_info, annual_tide, monthly_tide = load_processed_data()
 
     plot_eda(monthly_tide, annual_tide)
+    monthly_outliers, annual_outliers = write_outlier_tables(monthly_tide, annual_tide)
+    plot_monthly_outliers(monthly_tide, monthly_outliers)
+    top_extremes = write_top_extreme_years(annual_tide)
+    mailiao_2018_monthly_check = write_mailiao_2018_monthly_check(monthly_tide)
+    summary_statistics = write_summary_statistics(annual_tide)
     trend_results = run_trend_analysis(annual_tide)
     _, model_metrics, return_levels = run_extreme_value_analysis(annual_tide)
     extreme_sensitivity = run_extreme_year_sensitivity(annual_tide)
     length_sensitivity = run_data_length_sensitivity(annual_tide)
     write_summary(
         station_info,
+        summary_statistics,
+        monthly_outliers,
+        annual_outliers,
+        top_extremes,
+        mailiao_2018_monthly_check,
         trend_results,
         model_metrics,
         return_levels,

@@ -1,0 +1,4 @@
+﻿station_name,station_label,year,highest_high_water_level,lower_bound,upper_bound,outlier_type
+萡子寮潮位站,Boziliao,2007,1.781,1.8651250000000013,2.584124999999999,low
+萡子寮潮位站,Boziliao,2023,2.591,1.8651250000000013,2.584124999999999,high
+麥寮潮位站,Mailiao,2018,3.927,2.1882500000000005,2.9402499999999994,high

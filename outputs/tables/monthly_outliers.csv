@@ -1,0 +1,6 @@
+﻿station_name,station_label,year,month,date,mean_tide_level,lower_bound,upper_bound,outlier_type
+麥寮潮位站,Mailiao,2015,2,2015-02-01,-0.595,-0.084125,0.774875,low
+麥寮潮位站,Mailiao,2015,3,2015-03-01,-0.829,-0.084125,0.774875,low
+麥寮潮位站,Mailiao,2015,4,2015-04-01,-0.122,-0.084125,0.774875,low
+麥寮潮位站,Mailiao,2015,6,2015-06-01,1.022,-0.084125,0.774875,high
+麥寮潮位站,Mailiao,2015,7,2015-07-01,1.352,-0.084125,0.774875,high

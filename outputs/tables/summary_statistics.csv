@@ -1,0 +1,5 @@
+﻿station_name,station_label,variable,mean,std,min,max,median,skewness
+萡子寮潮位站,Boziliao,mean_tide_level,0.2718,0.1335871881660261,0.048,0.465,0.274,-0.21744515294187988
+萡子寮潮位站,Boziliao,highest_high_water_level,2.2119,0.19388816635532863,1.781,2.591,2.2155,-0.041373573007092664
+麥寮潮位站,Mailiao,mean_tide_level,0.34625,0.05289401020710638,0.269,0.502,0.3335,1.2829840759630866
+麥寮潮位站,Mailiao,highest_high_water_level,2.6273,0.33453881845404965,2.337,3.927,2.56,3.3102449146293877

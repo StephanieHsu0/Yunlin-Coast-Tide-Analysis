@@ -163,8 +163,8 @@ Content:
 
 Figures and tables:
 
-- `outputs/figures/06_mailiao_histogram_fitted_pdf.png`
-- `outputs/figures/06_boziliao_histogram_fitted_pdf.png`
+- `outputs/figures/05_histogram_fitted_pdf_mailiao.png`
+- `outputs/figures/06_histogram_fitted_pdf_boziliao.png`
 - `outputs/tables/model_fit_metrics.csv`
 - `outputs/tables/extreme_value_parameters.csv`
 
@@ -178,8 +178,8 @@ Content:
 
 Figures:
 
-- `outputs/figures/07_mailiao_qq_plot.png`
-- `outputs/figures/07_boziliao_qq_plot.png`
+- `outputs/figures/07_qq_plot_mailiao.png`
+- `outputs/figures/08_qq_plot_boziliao.png`
 
 ## Slide 14. Return Level Results
 
@@ -195,8 +195,8 @@ Content:
 
 Figures and tables:
 
-- `outputs/figures/08_mailiao_return_level.png`
-- `outputs/figures/08_boziliao_return_level.png`
+- `outputs/figures/09_return_level_plot_mailiao.png`
+- `outputs/figures/10_return_level_plot_boziliao.png`
 - `outputs/tables/return_levels.csv`
 
 ## Slide 15. Uncertainty and Sensitivity
@@ -210,9 +210,11 @@ Content:
 
 Figures and tables:
 
-- `outputs/figures/09_extreme_year_sensitivity.png`
+- `outputs/figures/11_hhw_minus_hat_timeseries.png`
 - `outputs/tables/sensitivity_extreme_year.csv`
 - `outputs/tables/sensitivity_data_length.csv`
+- `outputs/tables/monthly_outliers.csv`
+- `outputs/tables/annual_outliers.csv`
 
 ## Slide 16. Engineering and Disaster-Risk Implications
 

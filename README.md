@@ -84,14 +84,16 @@ The value `"-"` is converted to missing data (`NaN`), never to zero.
 ├── scripts/
 │   ├── 01_process_cwa_tide_json.py
 │   ├── 02_analyze_yunlin_tides.py
-│   └── analyze_tides.py
+├── archive/
+│   ├── analyze_tides.py
+│   └── tide_data_template.csv
 ├── slides/
 │   └── presentation_draft.md
 ├── requirements.txt
 └── README.md
 ```
 
-`analyze_tides.py` is kept as an earlier all-in-one script. The recommended workflow is the two-script workflow below.
+`archive/` keeps older files for reference only. The recommended workflow is the two-script workflow below.
 
 ## Install and Run
 
@@ -152,11 +154,15 @@ Figure outputs:
 - `outputs/figures/03_annual_mean_sea_level_trend.png`
 - `outputs/figures/04_annual_max_high_water_timeseries.png`
 - `outputs/figures/05_histogram_fitted_pdf_mailiao.png`
-- `outputs/figures/05_histogram_fitted_pdf_boziliao.png`
+- `outputs/figures/06_histogram_fitted_pdf_boziliao.png`
 - `outputs/figures/07_qq_plot_mailiao.png`
 - `outputs/figures/08_qq_plot_boziliao.png`
 - `outputs/figures/09_return_level_plot_mailiao.png`
-- `outputs/figures/10_return_level_plot_bozilio.png`
+- `outputs/figures/10_return_level_plot_boziliao.png`
+- `outputs/figures/11_hhw_minus_hat_timeseries.png`
+- `outputs/figures/12_monthly_mean_tide_outliers_marked.png`
+- `outputs/figures/13_return_level_plot_mailiao_logx.png`
+- `outputs/figures/14_return_level_plot_boziliao_logx.png`
 
 Table outputs:
 
@@ -166,6 +172,11 @@ Table outputs:
 - `outputs/tables/return_levels.csv`
 - `outputs/tables/sensitivity_extreme_year.csv`
 - `outputs/tables/sensitivity_data_length.csv`
+- `outputs/tables/monthly_outliers.csv`
+- `outputs/tables/annual_outliers.csv`
+- `outputs/tables/top_extreme_years.csv`
+- `outputs/tables/mailiao_2018_monthly_check.csv`
+- `outputs/tables/summary_statistics.csv`
 
 Summary:
 
@@ -178,6 +189,11 @@ EDA:
 - monthly mean tide time series
 - monthly tide boxplot for seasonality
 - annual maximum high-water time series
+- annual `hhw_minus_hat` time series for preliminary interpretation of observed high water relative to astronomical tide
+- IQR outlier checks for monthly `mean_tide_level` and annual `highest_high_water_level`
+- top five annual extreme high-water years per station
+- Mailiao 2018 monthly check sorted by monthly highest high-water level
+- descriptive statistics for annual `mean_tide_level` and `highest_high_water_level`
 
 Trend analysis:
 
@@ -192,9 +208,10 @@ Extreme-value analysis:
 - Gumbel distribution
 - GEV distribution
 - histogram + fitted PDF
-- Q-Q plot
+- Q-Q plot using Weibull plotting position
 - AIC and BIC
 - return levels for 10, 20, 50, and 100 years
+- supplemental log-scale return level plots
 
 Uncertainty analysis:
 

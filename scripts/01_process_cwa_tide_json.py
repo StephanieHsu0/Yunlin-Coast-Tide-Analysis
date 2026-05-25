@@ -221,6 +221,12 @@ def validate_outputs(
     if len(monthly_tide) != 480:
         raise ValueError(f"monthly_tide should have 480 rows, got {len(monthly_tide)}.")
 
+    found_stations = set(station_info["station_name"])
+    if found_stations != TARGET_STATION_NAMES:
+        raise ValueError(
+            f"Expected stations {TARGET_STATION_NAMES}, but found {found_stations}."
+        )
+
     for station_name in TARGET_STATION_NAMES:
         annual_station = annual_tide[annual_tide["station_name"] == station_name]
         monthly_station = monthly_tide[monthly_tide["station_name"] == station_name]
