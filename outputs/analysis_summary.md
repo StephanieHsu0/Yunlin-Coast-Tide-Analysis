@@ -42,6 +42,51 @@ The analysis uses relative water levels referenced to TWVD2001.
 | 麥寮潮位站          | Mailiao         |   2015 |       6 | 2015-06-01 00:00:00 |             1.022 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
 | 麥寮潮位站          | Mailiao         |   2015 |       7 | 2015-07-01 00:00:00 |             1.352 |                        nan |                     nan |                    nan |                nan | partial_or_incomplete_record |
 
+## Valid Monthly Record Counts
+
+| station_name   | station_label   |   year |   valid_month_count |   incomplete_month_count |   missing_mean_tide_count | meets_10_month_threshold   |
+|:---------------|:----------------|-------:|--------------------:|-------------------------:|--------------------------:|:---------------------------|
+| 萡子寮潮位站         | Boziliao        |   2006 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2007 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2008 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2009 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2010 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2011 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2012 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2013 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2014 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2015 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2016 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2017 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2018 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2019 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2020 |                  11 |                        0 |                         1 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2021 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2022 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2023 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2024 |                  12 |                        0 |                         0 | True                       |
+| 萡子寮潮位站         | Boziliao        |   2025 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2006 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2007 |                  11 |                        0 |                         1 | True                       |
+| 麥寮潮位站          | Mailiao         |   2008 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2009 |                  11 |                        0 |                         1 | True                       |
+| 麥寮潮位站          | Mailiao         |   2010 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2011 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2012 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2013 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2014 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2015 |                   5 |                        7 |                         1 | False                      |
+| 麥寮潮位站          | Mailiao         |   2016 |                  11 |                        0 |                         1 | True                       |
+| 麥寮潮位站          | Mailiao         |   2017 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2018 |                  11 |                        0 |                         1 | True                       |
+| 麥寮潮位站          | Mailiao         |   2019 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2020 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2021 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2022 |                  11 |                        0 |                         1 | True                       |
+| 麥寮潮位站          | Mailiao         |   2023 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2024 |                  12 |                        0 |                         0 | True                       |
+| 麥寮潮位站          | Mailiao         |   2025 |                  12 |                        0 |                         0 | True                       |
+
 Mailiao 2015 Jan-Jul records are flagged as partial or incomplete monthly records because several key monthly tide statistics are missing. Therefore, these months are excluded from the QC version of monthly mean tide and seasonality plots, but the original data are retained for transparency.
 
 ## Annual High-Water IQR Outliers
@@ -168,6 +213,7 @@ Histogram bin edges were manually selected using interpretable water-level inter
 ## Data Quality Notes
 
 - Raw monthly figures are retained for transparency and data-quality inspection. QC-filtered monthly figures exclude Mailiao Jan-Jul 2015 partial/incomplete records and are used as the main figures for monthly mean tide and seasonality interpretation.
+- The QC-filtered monthly time series keeps the full monthly date index and sets Mailiao Jan-Jul 2015 mean tide levels to NaN, so the missing period appears as a line gap without interpolation or filling.
 - Monthly-mean and seasonality figures use QC-filtered data, while annual-extreme analyses retain the original annual maximum records.
 - The HHW-HAT plot highlights Mailiao 2018 as an influential extreme year.
 - Return level plots with log x-axis are recommended for hydrologic frequency interpretation.

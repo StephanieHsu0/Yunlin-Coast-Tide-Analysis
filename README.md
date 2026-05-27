@@ -176,6 +176,7 @@ Table outputs:
 - `outputs/tables/sensitivity_data_length.csv`
 - `outputs/tables/monthly_outliers.csv`
 - `outputs/tables/incomplete_monthly_records.csv`
+- `outputs/tables/valid_month_counts.csv`
 - `outputs/tables/annual_outliers.csv`
 - `outputs/tables/top_extreme_years.csv`
 - `outputs/tables/mailiao_2018_monthly_check.csv`
@@ -191,6 +192,7 @@ EDA:
 
 - raw monthly mean tide time series and raw monthly tide boxplot show all original monthly records
 - QC-filtered monthly mean tide and seasonality figures exclude flagged incomplete monthly records
+- QC-filtered monthly time series preserves the full monthly date index and shows excluded Mailiao 2015 Jan-Jul records as a line gap
 - annual maximum high-water time series
 - annual `hhw_minus_hat` time series for preliminary interpretation of observed high water relative to astronomical tide
 - IQR outlier checks for monthly `mean_tide_level` and annual `highest_high_water_level`

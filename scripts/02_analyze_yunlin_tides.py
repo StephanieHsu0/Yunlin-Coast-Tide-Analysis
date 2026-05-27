@@ -140,7 +140,10 @@ def validate_inputs(
 
 
 def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
-    monthly_tide_qc = monthly_tide[monthly_tide["is_valid_monthly_mean_for_eda"]].copy()
+    monthly_plot_df = monthly_tide.copy()
+    incomplete_mask = ~monthly_plot_df["is_valid_monthly_mean_for_eda"]
+    monthly_plot_df.loc[incomplete_mask, "mean_tide_level"] = np.nan
+    monthly_analysis_df = monthly_tide[monthly_tide["is_valid_monthly_mean_for_eda"]].copy()
 
     plt.figure(figsize=(12, 5))
     sns.lineplot(
@@ -171,25 +174,41 @@ def plot_eda(monthly_tide: pd.DataFrame, annual_tide: pd.DataFrame) -> None:
     plt.legend(title="Station")
     save_fig("02_monthly_tide_boxplot_raw.png")
 
-    plt.figure(figsize=(12, 5))
-    sns.lineplot(
-        data=monthly_tide_qc,
-        x="date",
-        y="mean_tide_level",
-        hue="station_label",
-        marker="o",
-        linewidth=1.5,
-        markersize=3,
+    fig, ax = plt.subplots(figsize=(12, 5))
+    for station_label, group in monthly_plot_df.groupby("station_label"):
+        group = group.sort_values("date")
+        ax.plot(
+            group["date"],
+            group["mean_tide_level"],
+            marker="o",
+            linewidth=1.5,
+            markersize=3,
+            label=station_label,
+        )
+    ax.axvspan(
+        pd.Timestamp("2015-01-01"),
+        pd.Timestamp("2015-07-31"),
+        color="gray",
+        alpha=0.15,
+        label="Mailiao Jan-Jul 2015 incomplete",
     )
     plt.title("Monthly Mean Tide Level, 2006-2025 (QC-filtered)")
     plt.xlabel("Date")
     plt.ylabel("Mean tide level (m, TWVD2001)")
     plt.legend(title="Station")
+    plt.text(
+        0.01,
+        0.95,
+        "Mailiao Jan-Jul 2015 incomplete records were excluded; missing period is shown as a gap.",
+        transform=plt.gca().transAxes,
+        fontsize=9,
+        verticalalignment="top",
+    )
     save_fig("15_monthly_mean_tide_timeseries_qc.png")
 
     plt.figure(figsize=(10, 5))
     sns.boxplot(
-        data=monthly_tide_qc,
+        data=monthly_analysis_df,
         x="month",
         y="mean_tide_level",
         hue="station_label",
@@ -463,6 +482,32 @@ def write_incomplete_monthly_records(monthly_tide: pd.DataFrame) -> pd.DataFrame
         encoding="utf-8-sig",
     )
     return incomplete_records
+
+
+def write_valid_month_counts(monthly_tide: pd.DataFrame) -> pd.DataFrame:
+    monthly_counts = monthly_tide.copy()
+    monthly_counts["valid_for_monthly_eda"] = (
+        monthly_counts["is_valid_monthly_mean_for_eda"] & monthly_counts["mean_tide_level"].notna()
+    )
+    valid_month_counts = (
+        monthly_counts.groupby(["station_name", "station_label", "year"])
+        .agg(
+            valid_month_count=("valid_for_monthly_eda", "sum"),
+            incomplete_month_count=(
+                "data_quality_flag",
+                lambda values: (values == "partial_or_incomplete_record").sum(),
+            ),
+            missing_mean_tide_count=("mean_tide_level", lambda values: values.isna().sum()),
+        )
+        .reset_index()
+    )
+    valid_month_counts["meets_10_month_threshold"] = valid_month_counts["valid_month_count"] >= 10
+    valid_month_counts.to_csv(
+        TABLE_DIR / "valid_month_counts.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return valid_month_counts
 
 
 def write_top_extreme_years(annual_tide: pd.DataFrame) -> pd.DataFrame:
@@ -828,6 +873,7 @@ def write_summary(
     summary_statistics: pd.DataFrame,
     monthly_outliers: pd.DataFrame,
     incomplete_monthly_records: pd.DataFrame,
+    valid_month_counts: pd.DataFrame,
     annual_outliers: pd.DataFrame,
     top_extremes: pd.DataFrame,
     mailiao_2018_monthly_check: pd.DataFrame,
@@ -869,6 +915,10 @@ def write_summary(
         incomplete_monthly_records.to_markdown(index=False)
         if not incomplete_monthly_records.empty
         else "No incomplete monthly records flagged.",
+        "",
+        "## Valid Monthly Record Counts",
+        "",
+        valid_month_counts.to_markdown(index=False),
         "",
         (
             "Mailiao 2015 Jan-Jul records are flagged as partial or incomplete monthly records "
@@ -930,6 +980,7 @@ def write_summary(
         "## Data Quality Notes",
         "",
         "- Raw monthly figures are retained for transparency and data-quality inspection. QC-filtered monthly figures exclude Mailiao Jan-Jul 2015 partial/incomplete records and are used as the main figures for monthly mean tide and seasonality interpretation.",
+        "- The QC-filtered monthly time series keeps the full monthly date index and sets Mailiao Jan-Jul 2015 mean tide levels to NaN, so the missing period appears as a line gap without interpolation or filling.",
         "- Monthly-mean and seasonality figures use QC-filtered data, while annual-extreme analyses retain the original annual maximum records.",
         "- The HHW-HAT plot highlights Mailiao 2018 as an influential extreme year.",
         "- Return level plots with log x-axis are recommended for hydrologic frequency interpretation.",
@@ -966,6 +1017,7 @@ def analyze() -> None:
     plot_eda(monthly_tide, annual_tide)
     monthly_outliers, annual_outliers = write_outlier_tables(monthly_tide, annual_tide)
     incomplete_monthly_records = write_incomplete_monthly_records(monthly_tide)
+    valid_month_counts = write_valid_month_counts(monthly_tide)
     plot_monthly_outliers(monthly_tide, monthly_outliers)
     top_extremes = write_top_extreme_years(annual_tide)
     mailiao_2018_monthly_check = write_mailiao_2018_monthly_check(monthly_tide)
@@ -979,6 +1031,7 @@ def analyze() -> None:
         summary_statistics,
         monthly_outliers,
         incomplete_monthly_records,
+        valid_month_counts,
         annual_outliers,
         top_extremes,
         mailiao_2018_monthly_check,
