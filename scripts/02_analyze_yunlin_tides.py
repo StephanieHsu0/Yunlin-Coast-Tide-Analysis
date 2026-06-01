@@ -20,6 +20,14 @@ SUMMARY_PATH = ROOT / "outputs" / "analysis_summary.md"
 
 RETURN_PERIODS = [10, 20, 50, 100]
 ALTERNATIVE_RETURN_PERIODS = [2, 5, 10, 20, 50, 100]
+BOOTSTRAP_BAND_PERIODS = np.arange(2, 101)
+BOOTSTRAP_BAND_PROBABILITIES = 1 - 1 / BOOTSTRAP_BAND_PERIODS
+BOOTSTRAP_BAND_XTICKS = [2, 5, 10, 20, 50, 100]
+BOOTSTRAP_DISTRIBUTIONS = ["Gumbel", "GEV"]
+BOOTSTRAP_BAND_COLORS = {
+    "Gumbel": "#1f77b4",
+    "GEV": "#d62728",
+}
 ALL_DISTRIBUTIONS = ["Gumbel", "GEV", "Lognormal", "Pearson Type III"]
 STATION_SLUGS = {
     "麥寮潮位站": "mailiao",
@@ -963,6 +971,221 @@ def run_all_distribution_analysis(annual_tide: pd.DataFrame) -> tuple[pd.DataFra
     return comparison, return_levels
 
 
+def run_bootstrap_return_levels(
+    annual_tide: pd.DataFrame,
+    n_bootstrap: int = 1000,
+    random_seed: int = 42,
+) -> pd.DataFrame:
+    """Estimate sampling uncertainty in return levels by bootstrap resampling.
+
+    Bootstrap resamples the observed annual maxima with replacement and refits
+    Gumbel/GEV models to estimate sampling uncertainty. It does not create new
+    information or remove the limitation of short records. Wide intervals imply
+    high uncertainty and model sensitivity.
+
+    Very wide GEV confidence bands indicate instability of the shape parameter
+    under the ~20-year record and sensitivity to influential extremes such as
+    Mailiao 2018. Gumbel is generally more stable and is treated as the baseline.
+    """
+    rng = np.random.default_rng(random_seed)
+    rows = []
+
+    for station_name, group in annual_tide.groupby("station_name"):
+        values = group["highest_high_water_level"].dropna().to_numpy(dtype=float)
+        if len(values) < 8:
+            warnings.warn(f"{station_name}: too few annual maxima for bootstrap return levels.")
+            continue
+
+        station_label = group["station_label"].iloc[0]
+        slug = station_slug(station_name)
+        bootstrap_values: dict[tuple[str, int], list[float]] = {
+            (distribution, return_period): []
+            for distribution in BOOTSTRAP_DISTRIBUTIONS
+            for return_period in RETURN_PERIODS
+        }
+        bootstrap_curves: dict[str, list[np.ndarray]] = {
+            distribution: [] for distribution in BOOTSTRAP_DISTRIBUTIONS
+        }
+
+        for _ in range(n_bootstrap):
+            sample = rng.choice(values, size=len(values), replace=True)
+            for distribution in BOOTSTRAP_DISTRIBUTIONS:
+                try:
+                    fit = fit_distribution(sample, station_name, distribution)
+                    curve = distribution_ppf(BOOTSTRAP_BAND_PROBABILITIES, fit)
+                except Exception:
+                    continue
+
+                if not np.all(np.isfinite(curve)):
+                    continue
+
+                bootstrap_curves[distribution].append(curve.astype(float))
+                for return_period in RETURN_PERIODS:
+                    bootstrap_values[(distribution, return_period)].append(
+                        float(curve[return_period - 2])
+                    )
+
+        original_fits: dict[str, FitResult] = {}
+        for distribution in BOOTSTRAP_DISTRIBUTIONS:
+            try:
+                original_fits[distribution] = fit_distribution(values, station_name, distribution)
+            except Exception as exc:
+                warnings.warn(f"{station_name}: original {distribution} fit failed in bootstrap: {exc}")
+                continue
+
+            for return_period in RETURN_PERIODS:
+                estimates = np.asarray(bootstrap_values[(distribution, return_period)], dtype=float)
+                original_estimate = distribution_ppf(
+                    np.array([1 - 1 / return_period]),
+                    original_fits[distribution],
+                )[0]
+                successful_fits = len(estimates)
+                failed_fits = n_bootstrap - successful_fits
+
+                rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": distribution,
+                        "return_period_years": return_period,
+                        "original_estimate": original_estimate,
+                        "bootstrap_mean": np.nanmean(estimates) if successful_fits else np.nan,
+                        "bootstrap_std": np.nanstd(estimates, ddof=1) if successful_fits > 1 else np.nan,
+                        "percentile_2_5": np.nanpercentile(estimates, 2.5) if successful_fits else np.nan,
+                        "percentile_50": np.nanpercentile(estimates, 50) if successful_fits else np.nan,
+                        "percentile_97_5": np.nanpercentile(estimates, 97.5) if successful_fits else np.nan,
+                        "successful_bootstrap_fits": successful_fits,
+                        "failed_bootstrap_fits": failed_fits,
+                    }
+                )
+
+        station_rows = pd.DataFrame([row for row in rows if row["station_name"] == station_name])
+        if not station_rows.empty:
+            plot_bootstrap_return_levels(station_label, slug, station_rows)
+        if original_fits:
+            plot_bootstrap_return_level_bands(
+                station_label,
+                slug,
+                original_fits,
+                bootstrap_curves,
+            )
+            if slug == "mailiao":
+                plot_bootstrap_return_level_bands(
+                    station_label,
+                    slug,
+                    original_fits,
+                    bootstrap_curves,
+                    ylim=(2.4, 5.0),
+                    annotation="GEV upper CI exceeds plot range at long return periods.",
+                    filename_suffix="_zoomed",
+                )
+
+    bootstrap_table = pd.DataFrame(rows)
+    bootstrap_table.to_csv(
+        TABLE_DIR / "bootstrap_return_levels.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return bootstrap_table
+
+
+def plot_bootstrap_return_levels(
+    station_label: str,
+    slug: str,
+    bootstrap_table: pd.DataFrame,
+) -> None:
+    plt.figure(figsize=(8, 5))
+    for distribution, group in bootstrap_table.groupby("distribution"):
+        group = group.sort_values("return_period_years")
+        lower_error = group["original_estimate"] - group["percentile_2_5"]
+        upper_error = group["percentile_97_5"] - group["original_estimate"]
+        plt.errorbar(
+            group["return_period_years"],
+            group["original_estimate"],
+            yerr=[lower_error, upper_error],
+            marker="o",
+            capsize=4,
+            label=distribution,
+        )
+    plt.xscale("log")
+    plt.xticks(RETURN_PERIODS, RETURN_PERIODS)
+    plt.title(f"{station_label}: Bootstrap Return Level Uncertainty")
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    plt.legend(title="Distribution")
+    save_fig(f"bootstrap_return_levels_{slug}.png")
+
+
+def plot_bootstrap_return_level_bands(
+    station_label: str,
+    slug: str,
+    original_fits: dict[str, FitResult],
+    bootstrap_curves: dict[str, list[np.ndarray]],
+    *,
+    ylim: tuple[float, float] | None = None,
+    annotation: str | None = None,
+    filename_suffix: str = "",
+) -> None:
+    """Plot return level curves with 95% bootstrap confidence bands on a log x-axis.
+
+    Very wide GEV bands usually indicate instability of the shape parameter under
+    short records and sensitivity to influential extremes such as Mailiao 2018.
+    """
+    periods = BOOTSTRAP_BAND_PERIODS
+    plt.figure(figsize=(8, 5))
+
+    for distribution in BOOTSTRAP_DISTRIBUTIONS:
+        if distribution not in original_fits:
+            continue
+
+        color = BOOTSTRAP_BAND_COLORS[distribution]
+        curves = bootstrap_curves.get(distribution, [])
+        if curves:
+            curve_array = np.asarray(curves, dtype=float)
+            lower_band = np.nanpercentile(curve_array, 2.5, axis=0)
+            upper_band = np.nanpercentile(curve_array, 97.5, axis=0)
+            plt.fill_between(
+                periods,
+                lower_band,
+                upper_band,
+                color=color,
+                alpha=0.25,
+                label=f"{distribution} 95% bootstrap CI",
+            )
+
+        original_curve = distribution_ppf(BOOTSTRAP_BAND_PROBABILITIES, original_fits[distribution])
+        plt.plot(
+            periods,
+            original_curve,
+            color=color,
+            linewidth=2,
+            label=f"{distribution} fitted curve",
+        )
+
+    plt.xscale("log")
+    plt.xlim(2, 100)
+    plt.xticks(BOOTSTRAP_BAND_XTICKS, BOOTSTRAP_BAND_XTICKS)
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    title_suffix = " (zoomed)" if filename_suffix else ""
+    plt.title(f"{station_label}: Bootstrap Return Level Confidence Bands{title_suffix}")
+    if ylim is not None:
+        plt.ylim(*ylim)
+    if annotation:
+        plt.text(
+            0.03,
+            0.97,
+            annotation,
+            transform=plt.gca().transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
+            bbox={"facecolor": "white", "edgecolor": "0.7", "alpha": 0.9, "boxstyle": "round,pad=0.3"},
+        )
+    plt.legend(loc="lower right", fontsize=9)
+    save_fig(f"bootstrap_return_level_band_{slug}{filename_suffix}.png")
+
+
 def plot_histogram_with_fits(
     station_label: str,
     slug: str,
@@ -1371,6 +1594,7 @@ def analyze() -> None:
     trend_results = run_trend_analysis(annual_tide)
     trend_sensitivity = run_trend_based_sensitivity(trend_results)
     _, model_metrics, return_levels = run_extreme_value_analysis(annual_tide)
+    bootstrap_return_levels = run_bootstrap_return_levels(annual_tide)
     distribution_comparison, return_levels_all = run_all_distribution_analysis(annual_tide)
     extreme_sensitivity = run_extreme_year_sensitivity(annual_tide)
     length_sensitivity = run_data_length_sensitivity(annual_tide)
