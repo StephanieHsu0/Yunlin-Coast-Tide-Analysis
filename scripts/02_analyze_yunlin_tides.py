@@ -19,6 +19,8 @@ TABLE_DIR = ROOT / "outputs" / "tables"
 SUMMARY_PATH = ROOT / "outputs" / "analysis_summary.md"
 
 RETURN_PERIODS = [10, 20, 50, 100]
+ALTERNATIVE_RETURN_PERIODS = [2, 5, 10, 20, 50, 100]
+ALL_DISTRIBUTIONS = ["Gumbel", "GEV", "Lognormal", "Pearson Type III"]
 STATION_SLUGS = {
     "麥寮潮位站": "mailiao",
     "萡子寮潮位站": "boziliao",
@@ -358,6 +360,57 @@ def run_trend_analysis(annual_tide: pd.DataFrame) -> pd.DataFrame:
     return trend_results
 
 
+def run_trend_based_sensitivity(trend_results: pd.DataFrame) -> pd.DataFrame:
+    """Project relative background water-level change from Sen's slope.
+
+    This is a trend-based sensitivity scenario, not a precise prediction. It
+    does not replace extreme-value distribution uncertainty; it only illustrates
+    how continued background relative sea-level rise could raise future design
+    water levels.
+    """
+    rows = []
+    for _, row in trend_results.iterrows():
+        station_name = row["station_name"]
+        station_label = STATION_LABELS.get(station_name, station_name)
+        sen_slope_m_per_year = row["sen_slope_m_per_year"]
+        sen_slope_mm_per_year = row["sen_slope_mm_per_year"]
+        for years_ahead in [10, 25, 50]:
+            projected_increase_m = sen_slope_m_per_year * years_ahead
+            rows.append(
+                {
+                    "station_name": station_name,
+                    "station_label": station_label,
+                    "sen_slope_mm_per_year": sen_slope_mm_per_year,
+                    "years_ahead": years_ahead,
+                    "projected_increase_m": projected_increase_m,
+                    "projected_increase_cm": projected_increase_m * 100,
+                    "note": "Scenario only; assumes observed linear Sen’s slope continues.",
+                }
+            )
+
+    trend_sensitivity = pd.DataFrame(rows)
+    trend_sensitivity.to_csv(
+        TABLE_DIR / "trend_based_sensitivity.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    plt.figure(figsize=(8, 5))
+    sns.barplot(
+        data=trend_sensitivity,
+        x="years_ahead",
+        y="projected_increase_m",
+        hue="station_label",
+    )
+    plt.title("Trend-Based Relative Sea-Level Sensitivity")
+    plt.xlabel("Years ahead")
+    plt.ylabel("Projected increase (m)")
+    plt.legend(title="Station")
+    save_fig("trend_based_sensitivity.png")
+
+    return trend_sensitivity
+
+
 def iqr_outliers(data: pd.DataFrame, value_column: str, group_column: str = "station_name") -> pd.DataFrame:
     rows = []
     for station_name, group in data.groupby(group_column):
@@ -596,6 +649,12 @@ def fit_distribution(values: np.ndarray, station_name: str, distribution: str) -
     elif distribution == "GEV":
         params = stats.genextreme.fit(values)
         log_likelihood = float(np.sum(stats.genextreme.logpdf(values, *params)))
+    elif distribution == "Lognormal":
+        params = stats.lognorm.fit(values, floc=0)
+        log_likelihood = float(np.sum(stats.lognorm.logpdf(values, *params)))
+    elif distribution == "Pearson Type III":
+        params = stats.pearson3.fit(values)
+        log_likelihood = float(np.sum(stats.pearson3.logpdf(values, *params)))
     else:
         raise ValueError(f"Unknown distribution: {distribution}")
 
@@ -616,13 +675,69 @@ def fit_distribution(values: np.ndarray, station_name: str, distribution: str) -
 def distribution_pdf(x_values: np.ndarray, fit: FitResult) -> np.ndarray:
     if fit.distribution == "Gumbel":
         return stats.gumbel_r.pdf(x_values, *fit.params)
-    return stats.genextreme.pdf(x_values, *fit.params)
+    if fit.distribution == "GEV":
+        return stats.genextreme.pdf(x_values, *fit.params)
+    if fit.distribution == "Lognormal":
+        return stats.lognorm.pdf(x_values, *fit.params)
+    return stats.pearson3.pdf(x_values, *fit.params)
 
 
 def distribution_ppf(probabilities: np.ndarray, fit: FitResult) -> np.ndarray:
     if fit.distribution == "Gumbel":
         return stats.gumbel_r.ppf(probabilities, *fit.params)
-    return stats.genextreme.ppf(probabilities, *fit.params)
+    if fit.distribution == "GEV":
+        return stats.genextreme.ppf(probabilities, *fit.params)
+    if fit.distribution == "Lognormal":
+        return stats.lognorm.ppf(probabilities, *fit.params)
+    return stats.pearson3.ppf(probabilities, *fit.params)
+
+
+def distribution_cdf(x_values: np.ndarray, fit: FitResult) -> np.ndarray:
+    if fit.distribution == "Gumbel":
+        return stats.gumbel_r.cdf(x_values, *fit.params)
+    if fit.distribution == "GEV":
+        return stats.genextreme.cdf(x_values, *fit.params)
+    if fit.distribution == "Lognormal":
+        return stats.lognorm.cdf(x_values, *fit.params)
+    return stats.pearson3.cdf(x_values, *fit.params)
+
+
+def empirical_ad_statistic(values: np.ndarray, fit: FitResult) -> float:
+    """Empirical Anderson-Darling statistic using the fitted CDF.
+
+    AD is useful for extremes because it gives more weight to distribution tails
+    than central-fit statistics. Values are clipped to avoid log(0).
+    """
+    sorted_values = np.sort(values)
+    n = len(sorted_values)
+    cdf_values = np.clip(distribution_cdf(sorted_values, fit), 1e-10, 1 - 1e-10)
+    i = np.arange(1, n + 1)
+    ad_value = -n - np.mean(
+        (2 * i - 1)
+        * (np.log(cdf_values) + np.log(1 - cdf_values[::-1]))
+    )
+    return float(ad_value)
+
+
+def goodness_of_fit_metrics(values: np.ndarray, fit: FitResult) -> dict[str, float]:
+    """Compute numerical fit diagnostics for a fitted model.
+
+    Lower AIC/BIC values indicate better relative model performance. Smaller
+    KS/AD/CVM statistics indicate closer agreement between observed data and
+    the fitted distribution. With about 20 annual maxima, these diagnostics are
+    supporting evidence rather than the sole model-selection criterion.
+    """
+    cdf_function = lambda sample: distribution_cdf(np.asarray(sample), fit)
+    ks_result = stats.kstest(values, cdf_function)
+    cvm_result = stats.cramervonmises(values, cdf_function)
+    ad_statistic = empirical_ad_statistic(values, fit)
+
+    return {
+        "KS_statistic": float(ks_result.statistic),
+        "KS_pvalue": float(ks_result.pvalue),
+        "AD_statistic": ad_statistic,
+        "CVM_statistic": float(cvm_result.statistic),
+    }
 
 
 def station_slug(station_name: str) -> str:
@@ -712,6 +827,142 @@ def run_extreme_value_analysis(
     return parameters, metrics, return_levels
 
 
+def run_all_distribution_analysis(annual_tide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fit additional frequency-analysis alternatives without replacing the baseline Gumbel/GEV workflow.
+
+    Gumbel is kept as the stable baseline model. GEV is more flexible but can be
+    sensitive under short records because of its shape parameter. Lognormal and
+    Pearson Type III are empirical/hydrologic frequency-analysis alternatives.
+    Generalized Pareto is not fit here because it requires threshold-exceedance
+    data rather than annual block maxima.
+    """
+    comparison_rows = []
+    return_rows = []
+    goodness_rows = []
+
+    for station_name, group in annual_tide.groupby("station_name"):
+        values = np.sort(group["highest_high_water_level"].dropna().to_numpy(dtype=float))
+        if len(values) < 8:
+            warnings.warn(f"{station_name}: too few annual maxima for all-distribution fitting.")
+            continue
+
+        station_label = group["station_label"].iloc[0]
+        slug = station_slug(station_name)
+        fits: list[FitResult] = []
+
+        for distribution in ALL_DISTRIBUTIONS:
+            try:
+                fit = fit_distribution(values, station_name, distribution)
+            except Exception as exc:
+                warnings.warn(f"{station_name}: {distribution} fitting failed: {exc}")
+                comparison_rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": distribution,
+                        "n": len(values),
+                        "log_likelihood": np.nan,
+                        "aic": np.nan,
+                        "bic": np.nan,
+                        "param_1": np.nan,
+                        "param_2": np.nan,
+                        "param_3": np.nan,
+                        "status": f"failed: {exc}",
+                    }
+                )
+                continue
+
+            fits.append(fit)
+            params = list(fit.params) + [np.nan] * (3 - len(fit.params))
+            try:
+                gof = goodness_of_fit_metrics(values, fit)
+            except Exception as exc:
+                warnings.warn(f"{station_name}: {fit.distribution} goodness-of-fit failed: {exc}")
+                gof = {
+                    "KS_statistic": np.nan,
+                    "KS_pvalue": np.nan,
+                    "AD_statistic": np.nan,
+                    "CVM_statistic": np.nan,
+                }
+
+            comparison_rows.append(
+                {
+                    "station_name": station_name,
+                    "station_label": station_label,
+                    "distribution": fit.distribution,
+                    "n": len(values),
+                    "log_likelihood": fit.log_likelihood,
+                    "aic": fit.aic,
+                    "bic": fit.bic,
+                    "param_1": params[0],
+                    "param_2": params[1],
+                    "param_3": params[2],
+                    "status": "success",
+                }
+            )
+            goodness_rows.append(
+                {
+                    "station": station_label,
+                    "model": fit.distribution,
+                    "n": len(values),
+                    "number_of_parameters": len(fit.params),
+                    "log_likelihood": fit.log_likelihood,
+                    "AIC": fit.aic,
+                    "BIC": fit.bic,
+                    "KS_statistic": gof["KS_statistic"],
+                    "KS_pvalue": gof["KS_pvalue"],
+                    "AD_statistic": gof["AD_statistic"],
+                    "CVM_statistic": gof["CVM_statistic"],
+                }
+            )
+
+            for return_period in ALTERNATIVE_RETURN_PERIODS:
+                exceedance_probability = 1 / return_period
+                try:
+                    return_level = distribution_ppf(np.array([1 - exceedance_probability]), fit)[0]
+                except Exception as exc:
+                    warnings.warn(
+                        f"{station_name}: {fit.distribution} return level failed "
+                        f"for T={return_period}: {exc}"
+                    )
+                    return_level = np.nan
+                return_rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": fit.distribution,
+                        "return_period_years": return_period,
+                        "annual_exceedance_probability": exceedance_probability,
+                        "return_level": return_level,
+                    }
+                )
+
+        if fits:
+            plot_histogram_all_distributions(station_label, slug, values, fits)
+            plot_qq_all_distributions(station_label, slug, values, fits)
+            plot_return_level_all_distributions(station_label, slug, fits)
+
+    comparison = pd.DataFrame(comparison_rows)
+    return_levels = pd.DataFrame(return_rows)
+    goodness_of_fit = pd.DataFrame(goodness_rows)
+    comparison.to_csv(
+        TABLE_DIR / "distribution_fit_comparison.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return_levels.to_csv(
+        TABLE_DIR / "return_levels_all_distributions.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    goodness_of_fit.to_csv(
+        TABLE_DIR / "goodness_of_fit_results.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return comparison, return_levels
+
+
 def plot_histogram_with_fits(
     station_label: str,
     slug: str,
@@ -738,6 +989,33 @@ def plot_histogram_with_fits(
     save_fig(f"{figure_number}_histogram_fitted_pdf_{slug}.png")
 
 
+def plot_histogram_all_distributions(
+    station_label: str,
+    slug: str,
+    values: np.ndarray,
+    fits: list[FitResult],
+) -> None:
+    padding = values.std(ddof=1) if len(values) > 1 else 0.1
+    x_values = np.linspace(values.min() - padding, values.max() + padding, 300)
+    bins = HISTOGRAM_BINS[station_label]
+
+    plt.figure(figsize=(8, 5))
+    sns.histplot(values, stat="density", bins=bins, color="lightgray", edgecolor="black")
+    for fit in fits:
+        pdf_values = distribution_pdf(x_values, fit)
+        if np.isfinite(pdf_values).any():
+            plt.plot(x_values, pdf_values, label=fit.distribution)
+    plt.title(f"{station_label}: Annual Maximum Distribution (all distributions)")
+    plt.xlabel("Highest high-water level (m, TWVD2001)")
+    plt.ylabel("Density")
+    if station_label == "Boziliao":
+        plt.xticks(bins, [f"{edge:.2f}" for edge in bins])
+        for edge in bins:
+            plt.axvline(edge, color="gray", linestyle="--", linewidth=0.6, alpha=0.35)
+    plt.legend()
+    save_fig(f"alternative_distributions_histogram_{slug}.png")
+
+
 def plot_qq(
     station_label: str,
     slug: str,
@@ -761,6 +1039,37 @@ def plot_qq(
     save_fig(f"{figure_number}_qq_plot_{slug}.png")
 
 
+def plot_qq_all_distributions(
+    station_label: str,
+    slug: str,
+    values: np.ndarray,
+    fits: list[FitResult],
+) -> None:
+    probabilities = np.arange(1, len(values) + 1) / (len(values) + 1)
+    theoretical_values = []
+    for fit in fits:
+        try:
+            theoretical_values.append((fit, distribution_ppf(probabilities, fit)))
+        except Exception as exc:
+            warnings.warn(f"{station_label}: {fit.distribution} Q-Q plotting failed: {exc}")
+
+    if not theoretical_values:
+        return
+
+    min_axis = min(values.min(), *(series.min() for _, series in theoretical_values))
+    max_axis = max(values.max(), *(series.max() for _, series in theoretical_values))
+
+    plt.figure(figsize=(7, 7))
+    for fit, theoretical in theoretical_values:
+        plt.scatter(theoretical, values, label=fit.distribution)
+    plt.plot([min_axis, max_axis], [min_axis, max_axis], color="black", linestyle="--")
+    plt.title(f"{station_label}: Q-Q Plot (all distributions)")
+    plt.xlabel("Theoretical quantiles")
+    plt.ylabel("Observed annual maxima")
+    plt.legend()
+    save_fig(f"all_distributions_qq_plot_{slug}.png")
+
+
 def plot_return_level(station_label: str, slug: str, fits: list[FitResult]) -> None:
     periods = np.arange(2, 101)
     probabilities = 1 - 1 / periods
@@ -774,6 +1083,31 @@ def plot_return_level(station_label: str, slug: str, fits: list[FitResult]) -> N
     plt.legend()
     figure_number = "09" if slug == "mailiao" else "10"
     save_fig(f"{figure_number}_return_level_plot_{slug}.png")
+
+
+def plot_return_level_all_distributions(
+    station_label: str,
+    slug: str,
+    fits: list[FitResult],
+) -> None:
+    periods = np.arange(2, 101)
+    probabilities = 1 - 1 / periods
+
+    plt.figure(figsize=(8, 5))
+    for fit in fits:
+        try:
+            levels = distribution_ppf(probabilities, fit)
+        except Exception as exc:
+            warnings.warn(f"{station_label}: {fit.distribution} return-level plotting failed: {exc}")
+            continue
+        plt.plot(periods, levels, label=fit.distribution)
+    plt.xscale("log")
+    plt.xticks([2, 5, 10, 20, 50, 100], [2, 5, 10, 20, 50, 100])
+    plt.title(f"{station_label}: Return Level Plot (all distributions)")
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    plt.legend()
+    save_fig(f"all_distributions_return_level_plot_{slug}.png")
 
 
 def plot_return_level_logx(station_label: str, slug: str, fits: list[FitResult]) -> None:
@@ -878,6 +1212,7 @@ def write_summary(
     top_extremes: pd.DataFrame,
     mailiao_2018_monthly_check: pd.DataFrame,
     trend_results: pd.DataFrame,
+    trend_sensitivity: pd.DataFrame,
     model_metrics: pd.DataFrame,
     return_levels: pd.DataFrame,
     extreme_sensitivity: pd.DataFrame,
@@ -953,6 +1288,17 @@ def write_summary(
         "",
         trend_results.to_markdown(index=False),
         "",
+        "## Trend-Based Sensitivity Scenario",
+        "",
+        trend_sensitivity.to_markdown(index=False),
+        "",
+        (
+            "This trend-based sensitivity scenario assumes the observed linear Sen's slope "
+            "continues for 10, 25, and 50 years. It illustrates possible background "
+            "relative water-level increases and should not be interpreted as a precise forecast "
+            "or a replacement for extreme-value uncertainty analysis."
+        ),
+        "",
         "## Extreme-Value Model Fit",
         "",
         model_metrics.to_markdown(index=False),
@@ -1023,7 +1369,9 @@ def analyze() -> None:
     mailiao_2018_monthly_check = write_mailiao_2018_monthly_check(monthly_tide)
     summary_statistics = write_summary_statistics(annual_tide)
     trend_results = run_trend_analysis(annual_tide)
+    trend_sensitivity = run_trend_based_sensitivity(trend_results)
     _, model_metrics, return_levels = run_extreme_value_analysis(annual_tide)
+    distribution_comparison, return_levels_all = run_all_distribution_analysis(annual_tide)
     extreme_sensitivity = run_extreme_year_sensitivity(annual_tide)
     length_sensitivity = run_data_length_sensitivity(annual_tide)
     write_summary(
@@ -1036,6 +1384,7 @@ def analyze() -> None:
         top_extremes,
         mailiao_2018_monthly_check,
         trend_results,
+        trend_sensitivity,
         model_metrics,
         return_levels,
         extreme_sensitivity,

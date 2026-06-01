@@ -1,0 +1,7 @@
+﻿station_name,station_label,sen_slope_mm_per_year,years_ahead,projected_increase_m,projected_increase_cm,note
+萡子寮潮位站,Boziliao,23.07142857142857,10,0.2307142857142857,23.07142857142857,Scenario only; assumes observed linear Sen’s slope continues.
+萡子寮潮位站,Boziliao,23.07142857142857,25,0.5767857142857142,57.67857142857142,Scenario only; assumes observed linear Sen’s slope continues.
+萡子寮潮位站,Boziliao,23.07142857142857,50,1.1535714285714285,115.35714285714285,Scenario only; assumes observed linear Sen’s slope continues.
+麥寮潮位站,Mailiao,5.100000000000002,10,0.05100000000000002,5.100000000000001,Scenario only; assumes observed linear Sen’s slope continues.
+麥寮潮位站,Mailiao,5.100000000000002,25,0.12750000000000006,12.750000000000005,Scenario only; assumes observed linear Sen’s slope continues.
+麥寮潮位站,Mailiao,5.100000000000002,50,0.2550000000000001,25.50000000000001,Scenario only; assumes observed linear Sen’s slope continues.

@@ -140,6 +140,19 @@ Mailiao 2018 annual maximum high-water level is contributed by month 5: highest_
 | 萡子寮潮位站         |        20 |                0.0211083  |                   21.1083  |       1.5923e-09 |    0.873864 |              154 |  6.90647e-07 |              0.0230714 |                 23.0714 | significant increasing |
 | 麥寮潮位站          |        20 |                0.00509549 |                    5.09549 |       0.00870451 |    0.324808 |               97 |  0.00183141  |              0.0051    |                  5.1    | significant increasing |
 
+## Trend-Based Sensitivity Scenario
+
+| station_name   | station_label   |   sen_slope_mm_per_year |   years_ahead |   projected_increase_m |   projected_increase_cm | note                                                          |
+|:---------------|:----------------|------------------------:|--------------:|-----------------------:|------------------------:|:--------------------------------------------------------------|
+| 萡子寮潮位站         | Boziliao        |                 23.0714 |            10 |               0.230714 |                 23.0714 | Scenario only; assumes observed linear Sen’s slope continues. |
+| 萡子寮潮位站         | Boziliao        |                 23.0714 |            25 |               0.576786 |                 57.6786 | Scenario only; assumes observed linear Sen’s slope continues. |
+| 萡子寮潮位站         | Boziliao        |                 23.0714 |            50 |               1.15357  |                115.357  | Scenario only; assumes observed linear Sen’s slope continues. |
+| 麥寮潮位站          | Mailiao         |                  5.1    |            10 |               0.051    |                  5.1    | Scenario only; assumes observed linear Sen’s slope continues. |
+| 麥寮潮位站          | Mailiao         |                  5.1    |            25 |               0.1275   |                 12.75   | Scenario only; assumes observed linear Sen’s slope continues. |
+| 麥寮潮位站          | Mailiao         |                  5.1    |            50 |               0.255    |                 25.5    | Scenario only; assumes observed linear Sen’s slope continues. |
+
+This trend-based sensitivity scenario assumes the observed linear Sen's slope continues for 10, 25, and 50 years. It illustrates possible background relative water-level increases and should not be interpreted as a precise forecast or a replacement for extreme-value uncertainty analysis.
+
 ## Extreme-Value Model Fit
 
 | station_name   | distribution   |   log_likelihood |      aic |       bic |   n |
