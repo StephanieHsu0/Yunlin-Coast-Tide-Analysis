@@ -28,6 +28,14 @@ BOOTSTRAP_BAND_COLORS = {
     "Gumbel": "#1f77b4",
     "GEV": "#d62728",
 }
+# Three-distribution subset (Gumbel, GEV, Lognormal) for additional "_3dist" outputs.
+THREE_DISTRIBUTIONS = ["Gumbel", "GEV", "Lognormal"]
+THREE_DIST_RETURN_PERIODS = [2, 5, 10, 20, 50, 100]
+THREE_DIST_BAND_COLORS = {
+    "Gumbel": "#1f77b4",
+    "GEV": "#d62728",
+    "Lognormal": "#2ca02c",
+}
 ALL_DISTRIBUTIONS = ["Gumbel", "GEV", "Lognormal", "Pearson Type III"]
 STATION_SLUGS = {
     "麥寮潮位站": "mailiao",
@@ -1186,6 +1194,378 @@ def plot_bootstrap_return_level_bands(
     save_fig(f"bootstrap_return_level_band_{slug}{filename_suffix}.png")
 
 
+# =============================================================================
+# Three-distribution analysis (Gumbel, GEV, Lognormal only)
+# Additional outputs use the "_3dist" suffix. The original four-distribution
+# workflow above (including Pearson Type III) is unchanged.
+# =============================================================================
+
+
+def run_three_distribution_analysis(annual_tide: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Fit Gumbel, GEV, and Lognormal only; write separate tables and figures."""
+    goodness_rows = []
+    return_rows = []
+
+    for station_name, group in annual_tide.groupby("station_name"):
+        values = np.sort(group["highest_high_water_level"].dropna().to_numpy(dtype=float))
+        if len(values) < 8:
+            warnings.warn(f"{station_name}: too few annual maxima for 3-distribution fitting.")
+            continue
+
+        station_label = group["station_label"].iloc[0]
+        slug = station_slug(station_name)
+        fits: list[FitResult] = []
+
+        for distribution in THREE_DISTRIBUTIONS:
+            try:
+                fit = fit_distribution(values, station_name, distribution)
+            except Exception as exc:
+                warnings.warn(f"{station_name}: {distribution} fitting failed in 3-distribution analysis: {exc}")
+                goodness_rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": distribution,
+                        "n": len(values),
+                        "number_of_parameters": np.nan,
+                        "log_likelihood": np.nan,
+                        "AIC": np.nan,
+                        "BIC": np.nan,
+                        "KS_statistic": np.nan,
+                        "KS_pvalue": np.nan,
+                        "AD_statistic": np.nan,
+                        "CVM_statistic": np.nan,
+                        "status": f"failed: {exc}",
+                    }
+                )
+                continue
+
+            fits.append(fit)
+            try:
+                gof = goodness_of_fit_metrics(values, fit)
+            except Exception as exc:
+                warnings.warn(
+                    f"{station_name}: {distribution} goodness-of-fit failed in 3-distribution analysis: {exc}"
+                )
+                gof = {
+                    "KS_statistic": np.nan,
+                    "KS_pvalue": np.nan,
+                    "AD_statistic": np.nan,
+                    "CVM_statistic": np.nan,
+                }
+
+            goodness_rows.append(
+                {
+                    "station_name": station_name,
+                    "station_label": station_label,
+                    "distribution": fit.distribution,
+                    "n": len(values),
+                    "number_of_parameters": len(fit.params),
+                    "log_likelihood": fit.log_likelihood,
+                    "AIC": fit.aic,
+                    "BIC": fit.bic,
+                    "KS_statistic": gof["KS_statistic"],
+                    "KS_pvalue": gof["KS_pvalue"],
+                    "AD_statistic": gof["AD_statistic"],
+                    "CVM_statistic": gof["CVM_statistic"],
+                    "status": "success",
+                }
+            )
+
+            for return_period in THREE_DIST_RETURN_PERIODS:
+                exceedance_probability = 1 / return_period
+                try:
+                    return_level = distribution_ppf(np.array([1 - exceedance_probability]), fit)[0]
+                except Exception as exc:
+                    warnings.warn(
+                        f"{station_name}: {fit.distribution} return level failed "
+                        f"for T={return_period} in 3-distribution analysis: {exc}"
+                    )
+                    return_level = np.nan
+                return_rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": fit.distribution,
+                        "return_period_years": return_period,
+                        "annual_exceedance_probability": exceedance_probability,
+                        "return_level": return_level,
+                    }
+                )
+
+        if fits:
+            plot_histogram_3dist(station_label, slug, values, fits)
+            plot_qq_3dist(station_label, slug, values, fits)
+            plot_return_level_3dist(station_label, slug, fits)
+
+    goodness_of_fit_3dist = pd.DataFrame(goodness_rows)
+    return_levels_3dist = pd.DataFrame(return_rows)
+    goodness_of_fit_3dist.to_csv(
+        TABLE_DIR / "goodness_of_fit_3dist.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return_levels_3dist.to_csv(
+        TABLE_DIR / "return_levels_3dist.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return goodness_of_fit_3dist, return_levels_3dist
+
+
+def run_bootstrap_return_levels_3dist(
+    annual_tide: pd.DataFrame,
+    n_bootstrap: int = 1000,
+    random_seed: int = 42,
+) -> pd.DataFrame:
+    """Bootstrap return levels for Gumbel, GEV, and Lognormal only.
+
+    Separate from the original Gumbel/GEV bootstrap workflow. Lognormal is included
+    here as a hydrologic frequency-analysis alternative. Wide GEV bands under short
+    records often reflect shape-parameter instability and sensitivity to Mailiao 2018.
+    """
+    rng = np.random.default_rng(random_seed)
+    rows = []
+
+    for station_name, group in annual_tide.groupby("station_name"):
+        values = group["highest_high_water_level"].dropna().to_numpy(dtype=float)
+        if len(values) < 8:
+            warnings.warn(f"{station_name}: too few annual maxima for 3-distribution bootstrap.")
+            continue
+
+        station_label = group["station_label"].iloc[0]
+        slug = station_slug(station_name)
+        bootstrap_values: dict[tuple[str, int], list[float]] = {
+            (distribution, return_period): []
+            for distribution in THREE_DISTRIBUTIONS
+            for return_period in THREE_DIST_RETURN_PERIODS
+        }
+        bootstrap_curves: dict[str, list[np.ndarray]] = {
+            distribution: [] for distribution in THREE_DISTRIBUTIONS
+        }
+
+        for _ in range(n_bootstrap):
+            sample = rng.choice(values, size=len(values), replace=True)
+            for distribution in THREE_DISTRIBUTIONS:
+                try:
+                    fit = fit_distribution(sample, station_name, distribution)
+                    curve = distribution_ppf(BOOTSTRAP_BAND_PROBABILITIES, fit)
+                except Exception:
+                    continue
+
+                if not np.all(np.isfinite(curve)):
+                    continue
+
+                bootstrap_curves[distribution].append(curve.astype(float))
+                for return_period in THREE_DIST_RETURN_PERIODS:
+                    bootstrap_values[(distribution, return_period)].append(
+                        float(curve[return_period - 2])
+                    )
+
+        original_fits: dict[str, FitResult] = {}
+        for distribution in THREE_DISTRIBUTIONS:
+            try:
+                original_fits[distribution] = fit_distribution(values, station_name, distribution)
+            except Exception as exc:
+                warnings.warn(
+                    f"{station_name}: original {distribution} fit failed in 3-distribution bootstrap: {exc}"
+                )
+                continue
+
+            for return_period in THREE_DIST_RETURN_PERIODS:
+                estimates = np.asarray(bootstrap_values[(distribution, return_period)], dtype=float)
+                original_estimate = distribution_ppf(
+                    np.array([1 - 1 / return_period]),
+                    original_fits[distribution],
+                )[0]
+                successful_fits = len(estimates)
+                failed_fits = n_bootstrap - successful_fits
+
+                rows.append(
+                    {
+                        "station_name": station_name,
+                        "station_label": station_label,
+                        "distribution": distribution,
+                        "return_period_years": return_period,
+                        "original_estimate": original_estimate,
+                        "bootstrap_mean": np.nanmean(estimates) if successful_fits else np.nan,
+                        "bootstrap_std": np.nanstd(estimates, ddof=1) if successful_fits > 1 else np.nan,
+                        "percentile_2_5": np.nanpercentile(estimates, 2.5) if successful_fits else np.nan,
+                        "percentile_50": np.nanpercentile(estimates, 50) if successful_fits else np.nan,
+                        "percentile_97_5": np.nanpercentile(estimates, 97.5) if successful_fits else np.nan,
+                        "successful_bootstrap_fits": successful_fits,
+                        "failed_bootstrap_fits": failed_fits,
+                    }
+                )
+
+        if original_fits:
+            plot_bootstrap_ci_3dist(station_label, slug, original_fits, bootstrap_curves)
+            if slug == "mailiao":
+                plot_bootstrap_ci_3dist(
+                    station_label,
+                    slug,
+                    original_fits,
+                    bootstrap_curves,
+                    ylim=(2.4, 5.0),
+                    annotation="GEV upper CI exceeds plot range at long return periods.",
+                    filename_suffix="_zoom",
+                )
+
+    bootstrap_table_3dist = pd.DataFrame(rows)
+    bootstrap_table_3dist.to_csv(
+        TABLE_DIR / "bootstrap_return_levels_3dist.csv",
+        index=False,
+        encoding="utf-8-sig",
+    )
+    return bootstrap_table_3dist
+
+
+def plot_histogram_3dist(
+    station_label: str,
+    slug: str,
+    values: np.ndarray,
+    fits: list[FitResult],
+) -> None:
+    padding = values.std(ddof=1) if len(values) > 1 else 0.1
+    x_values = np.linspace(values.min() - padding, values.max() + padding, 300)
+    bins = HISTOGRAM_BINS[station_label]
+
+    plt.figure(figsize=(8, 5))
+    sns.histplot(values, stat="density", bins=bins, color="lightgray", edgecolor="black")
+    for fit in fits:
+        pdf_values = distribution_pdf(x_values, fit)
+        if np.isfinite(pdf_values).any():
+            plt.plot(x_values, pdf_values, label=fit.distribution)
+    plt.title(f"{station_label}: Annual Maximum Distribution (3 distributions)")
+    plt.xlabel("Highest high-water level (m, TWVD2001)")
+    plt.ylabel("Density")
+    if station_label == "Boziliao":
+        plt.xticks(bins, [f"{edge:.2f}" for edge in bins])
+        for edge in bins:
+            plt.axvline(edge, color="gray", linestyle="--", linewidth=0.6, alpha=0.35)
+    plt.legend()
+    save_fig(f"{slug}_distribution_3dist.png")
+
+
+def plot_qq_3dist(
+    station_label: str,
+    slug: str,
+    values: np.ndarray,
+    fits: list[FitResult],
+) -> None:
+    probabilities = np.arange(1, len(values) + 1) / (len(values) + 1)
+    theoretical_values = []
+    for fit in fits:
+        try:
+            theoretical_values.append((fit, distribution_ppf(probabilities, fit)))
+        except Exception as exc:
+            warnings.warn(f"{station_label}: {fit.distribution} Q-Q plotting failed in 3-distribution analysis: {exc}")
+
+    if not theoretical_values:
+        return
+
+    min_axis = min(values.min(), *(series.min() for _, series in theoretical_values))
+    max_axis = max(values.max(), *(series.max() for _, series in theoretical_values))
+
+    plt.figure(figsize=(7, 7))
+    for fit, theoretical in theoretical_values:
+        plt.scatter(theoretical, values, label=fit.distribution)
+    plt.plot([min_axis, max_axis], [min_axis, max_axis], color="black", linestyle="--")
+    plt.title(f"{station_label}: Q-Q Plot (3 distributions)")
+    plt.xlabel("Theoretical quantiles")
+    plt.ylabel("Observed annual maxima")
+    plt.legend()
+    save_fig(f"{slug}_qq_3dist.png")
+
+
+def plot_return_level_3dist(station_label: str, slug: str, fits: list[FitResult]) -> None:
+    periods = np.arange(2, 101)
+    probabilities = 1 - 1 / periods
+
+    plt.figure(figsize=(8, 5))
+    for fit in fits:
+        try:
+            levels = distribution_ppf(probabilities, fit)
+        except Exception as exc:
+            warnings.warn(
+                f"{station_label}: {fit.distribution} return-level plotting failed in 3-distribution analysis: {exc}"
+            )
+            continue
+        plt.plot(periods, levels, label=fit.distribution)
+    plt.xscale("log")
+    plt.xticks(BOOTSTRAP_BAND_XTICKS, BOOTSTRAP_BAND_XTICKS)
+    plt.title(f"{station_label}: Return Level Plot (3 distributions)")
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    plt.legend()
+    save_fig(f"{slug}_return_level_3dist.png")
+
+
+def plot_bootstrap_ci_3dist(
+    station_label: str,
+    slug: str,
+    original_fits: dict[str, FitResult],
+    bootstrap_curves: dict[str, list[np.ndarray]],
+    *,
+    ylim: tuple[float, float] | None = None,
+    annotation: str | None = None,
+    filename_suffix: str = "",
+) -> None:
+    periods = BOOTSTRAP_BAND_PERIODS
+    plt.figure(figsize=(8, 5))
+
+    for distribution in THREE_DISTRIBUTIONS:
+        if distribution not in original_fits:
+            continue
+
+        color = THREE_DIST_BAND_COLORS[distribution]
+        curves = bootstrap_curves.get(distribution, [])
+        if curves:
+            curve_array = np.asarray(curves, dtype=float)
+            lower_band = np.nanpercentile(curve_array, 2.5, axis=0)
+            upper_band = np.nanpercentile(curve_array, 97.5, axis=0)
+            plt.fill_between(
+                periods,
+                lower_band,
+                upper_band,
+                color=color,
+                alpha=0.25,
+                label=f"{distribution} 95% bootstrap CI",
+            )
+
+        original_curve = distribution_ppf(BOOTSTRAP_BAND_PROBABILITIES, original_fits[distribution])
+        plt.plot(
+            periods,
+            original_curve,
+            color=color,
+            linewidth=2,
+            label=f"{distribution} fitted curve",
+        )
+
+    plt.xscale("log")
+    plt.xlim(2, 100)
+    plt.xticks(BOOTSTRAP_BAND_XTICKS, BOOTSTRAP_BAND_XTICKS)
+    plt.xlabel("Return period (years)")
+    plt.ylabel("Return level (m, TWVD2001)")
+    title_suffix = " (zoomed)" if filename_suffix else ""
+    plt.title(f"{station_label}: Bootstrap Return Level Confidence Bands (3 distributions){title_suffix}")
+    if ylim is not None:
+        plt.ylim(*ylim)
+    if annotation:
+        plt.text(
+            0.03,
+            0.97,
+            annotation,
+            transform=plt.gca().transAxes,
+            ha="left",
+            va="top",
+            fontsize=9,
+            bbox={"facecolor": "white", "edgecolor": "0.7", "alpha": 0.9, "boxstyle": "round,pad=0.3"},
+        )
+    plt.legend(loc="lower right", fontsize=9)
+    save_fig(f"{slug}_bootstrap_ci_3dist{filename_suffix}.png")
+
+
 def plot_histogram_with_fits(
     station_label: str,
     slug: str,
@@ -1596,6 +1976,9 @@ def analyze() -> None:
     _, model_metrics, return_levels = run_extreme_value_analysis(annual_tide)
     bootstrap_return_levels = run_bootstrap_return_levels(annual_tide)
     distribution_comparison, return_levels_all = run_all_distribution_analysis(annual_tide)
+    # Additional three-distribution branch (Gumbel, GEV, Lognormal); original outputs unchanged.
+    goodness_of_fit_3dist, return_levels_3dist = run_three_distribution_analysis(annual_tide)
+    bootstrap_return_levels_3dist = run_bootstrap_return_levels_3dist(annual_tide)
     extreme_sensitivity = run_extreme_year_sensitivity(annual_tide)
     length_sensitivity = run_data_length_sensitivity(annual_tide)
     write_summary(
